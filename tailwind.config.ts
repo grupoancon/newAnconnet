@@ -1,19 +1,8 @@
-import type { Config } from "tailwindcss";
+import type { Config } from "tailwindcss"
 
-const config: Config = {
-  content: [
-    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
-  ],
-  theme: {
-    extend: {
-      colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
-      },
-    },
-  },
-  plugins: [],
-};
-export default config;
+// Tailwind v4 es CSS-first: los tokens de tema (colores, radios, etc.) se definen
+// en app/globals.css via @theme. Este archivo solo queda como punto de extension
+// para casos que sigan requiriendo configuracion en JS.
+const config: Config = {}
+
+export default config

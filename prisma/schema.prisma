@@ -1,0 +1,1195 @@
+// ============================================================================
+// TABLAS LEGACY (introspectadas desde la BD real via `prisma db pull`)
+// ----------------------------------------------------------------------------
+// Todo lo que sigue hasta la marca "TABLAS NUEVAS DE ESTA APP" ya existia en
+// la base de datos antes de este proyecto. NO se altera ninguna de estas
+// tablas desde aqui: solo se leen/referencian. `user`/`session`/`account`/
+// `verification`/`twoFactor` son el esquema de better-auth (login legacy);
+// el resto son las tablas de negocio del ERP que se va a reemplazar.
+//
+// `user.role` y `user.permissions` (texto plano) son del sistema legacy y NO
+// se usan para autorizar nada en esta app nueva: el RBAC de esta app vive por
+// completo en las tablas nuevas de abajo (Rol/Permiso/RolPermiso/UsuarioRol).
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model account {
+  id                    String    @id @db.VarChar(36)
+  accountId             String    @db.Text
+  providerId            String    @db.Text
+  userId                String    @db.VarChar(36)
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime? @db.Timestamp(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamp(3)
+  scope                 String?   @db.Text
+  password              String?   @db.Text
+  createdAt             DateTime  @default(now()) @db.Timestamp(3)
+  updatedAt             DateTime  @db.Timestamp(3)
+  user                  user      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "account_ibfk_1")
+
+  @@index([userId])
+}
+
+model acomisiones_abonos {
+  id            Int       @id @default(autoincrement())
+  ab_periodo    Int?      @default(0)
+  ab_lote       String?   @db.VarChar(80)
+  ab_cliente    String?   @db.VarChar(150)
+  ab_valor      Decimal?  @db.Decimal(15, 2)
+  ab_preliminar Int?
+  ab_fechacarga DateTime? @db.Date
+}
+
+model acomisiones_detalle {
+  id                    Int                  @id @default(autoincrement())
+  periodo_id            Int
+  inmueble              String               @db.VarChar(20)
+  proyecto              String               @db.VarChar(50)
+  cliente               String               @db.VarChar(100)
+  precio_venta          Decimal              @db.Decimal(12, 2)
+  diez_porciento        Decimal?             @db.Decimal(12, 2)
+  anterior              Decimal?             @db.Decimal(12, 2)
+  actual                Decimal?             @db.Decimal(12, 2)
+  abono_mes             Decimal?             @db.Decimal(12, 2)
+  comision_ic           Decimal?             @db.Decimal(12, 2)
+  porcentaje_ic         Decimal?             @db.Decimal(5, 2)
+  pagada_ic             Decimal?             @db.Decimal(12, 2)
+  por_pagar_ic          Decimal?             @db.Decimal(12, 2)
+  saldo_ic              Decimal?             @db.Decimal(12, 2)
+  comision_ig           Decimal?             @db.Decimal(12, 2)
+  porcentaje_ig         Decimal?             @db.Decimal(5, 2)
+  pagada_ig             Decimal?             @db.Decimal(12, 2)
+  por_pagar_ig          Decimal?             @db.Decimal(12, 2)
+  saldo_ig              Decimal?             @db.Decimal(12, 2)
+  comision_asesor1      Decimal?             @db.Decimal(12, 2)
+  porcentaje_asesor1    Decimal?             @db.Decimal(5, 2)
+  pagada_asesor1        Decimal?             @db.Decimal(12, 2)
+  por_pagar_asesor1     Decimal?             @db.Decimal(12, 2)
+  saldo_asesor1         Decimal?             @db.Decimal(12, 2)
+  nombre_asesor1        String?              @db.VarChar(100)
+  empresa_asesor1       String?              @db.VarChar(100)
+  comision_asesor2      Decimal?             @db.Decimal(12, 2)
+  porcentaje_asesor2    Decimal?             @db.Decimal(5, 2)
+  pagada_asesor2        Decimal?             @db.Decimal(12, 2)
+  por_pagar_asesor2     Decimal?             @db.Decimal(12, 2)
+  saldo_asesor2         Decimal?             @db.Decimal(12, 2)
+  nombre_asesor2        String?              @db.VarChar(100)
+  empresa_asesor2       String?              @db.VarChar(100)
+  comision_asesor3      Decimal?             @db.Decimal(12, 2)
+  porcentaje_asesor3    Decimal?             @db.Decimal(5, 2)
+  pagada_asesor3        Decimal?             @db.Decimal(12, 2)
+  por_pagar_asesor3     Decimal?             @db.Decimal(12, 2)
+  saldo_asesor3         Decimal?             @db.Decimal(12, 2)
+  nombre_asesor3        String?              @db.VarChar(100)
+  empresa_asesor3       String?              @db.VarChar(100)
+  comision_asesor4      Decimal?             @db.Decimal(12, 2)
+  porcentaje_asesor4    Decimal?             @db.Decimal(5, 2)
+  pagada_asesor4        Decimal?             @db.Decimal(12, 2)
+  por_pagar_asesor4     Decimal?             @db.Decimal(12, 2)
+  saldo_asesor4         Decimal?             @db.Decimal(12, 2)
+  nombre_asesor4        String?              @db.VarChar(100)
+  empresa_asesor4       String?              @db.VarChar(100)
+  observaciones         String?              @db.Text
+  comision_supervisor   Decimal?             @db.Decimal(12, 2)
+  porcentaje_supervisor Decimal?             @db.Decimal(5, 2)
+  pagada_supervisor     Decimal?             @db.Decimal(12, 2)
+  por_pagar_supervisor  Decimal?             @db.Decimal(12, 2)
+  saldo_supervisor      Decimal?             @db.Decimal(12, 2)
+  fecha_carga           DateTime             @db.DateTime(0)
+  fecha_actualizacion   DateTime?            @db.DateTime(0)
+  preliminar            String?              @db.VarChar(50)
+  aperiodos_comisiones  aperiodos_comisiones @relation(fields: [periodo_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "acomisiones_detalle_ibfk_1")
+
+  @@index([nombre_asesor1], map: "idx_comisiones_detalle_asesor1")
+  @@index([nombre_asesor2], map: "idx_comisiones_detalle_asesor2")
+  @@index([nombre_asesor3], map: "idx_comisiones_detalle_asesor3")
+  @@index([nombre_asesor4], map: "idx_comisiones_detalle_asesor4")
+  @@index([cliente], map: "idx_comisiones_detalle_cliente")
+  @@index([inmueble], map: "idx_comisiones_detalle_inmueble")
+  @@index([proyecto], map: "idx_comisiones_detalle_proyecto")
+  @@index([periodo_id], map: "periodo_id")
+}
+
+model acomisiones_mes {
+  id                    Int      @id @default(autoincrement())
+  inmueble              String   @db.VarChar(50)
+  proyecto              String   @db.VarChar(100)
+  cliente               String   @db.VarChar(150)
+  precio_venta          Decimal  @default(0.00) @db.Decimal(15, 2)
+  diez_porciento        Decimal? @default(0.00) @db.Decimal(15, 2)
+  anterior              Decimal? @default(0.00) @db.Decimal(15, 2)
+  actual                Decimal? @default(0.00) @db.Decimal(15, 2)
+  abono_mes             Decimal? @default(0.00) @db.Decimal(15, 2)
+  comision_ic           Decimal? @default(0.00) @db.Decimal(15, 2)
+  porcentaje_ic_x_lote  Decimal? @default(0.0000) @db.Decimal(8, 4)
+  pagada_ic             Decimal? @default(0.00) @db.Decimal(15, 2)
+  por_pagar_ic          Decimal? @default(0.00) @db.Decimal(15, 2)
+  saldo_ic              Decimal? @default(0.00) @db.Decimal(15, 2)
+  comision_ig           Decimal? @default(0.00) @db.Decimal(15, 2)
+  porcentaje_ig_x_lote  Decimal? @default(0.0000) @db.Decimal(8, 4)
+  pagada_ig             Decimal? @default(0.00) @db.Decimal(15, 2)
+  por_pagar_ig          Decimal? @default(0.00) @db.Decimal(15, 2)
+  saldo_ig              Decimal? @default(0.00) @db.Decimal(15, 2)
+  comision_asesor1      Decimal? @default(0.00) @db.Decimal(15, 2)
+  porcentaje_comision1  Decimal? @default(0.00000) @db.Decimal(8, 5)
+  pagada_a1             Decimal? @default(0.00) @db.Decimal(15, 2)
+  por_pagar_asesor1     Decimal? @default(0.00) @db.Decimal(15, 2)
+  saldo_a1              Decimal? @default(0.00) @db.Decimal(15, 2)
+  asesor1               String?  @db.VarChar(100)
+  empresa1              String?  @db.VarChar(100)
+  comision_asesor2      Decimal? @default(0.00) @db.Decimal(15, 2)
+  porcentaje_comision2  Decimal? @default(0.00000) @db.Decimal(8, 5)
+  pagada_a2             Decimal? @default(0.00) @db.Decimal(15, 2)
+  por_pagar_asesor2     Decimal? @default(0.00) @db.Decimal(15, 2)
+  saldo_a2              Decimal? @default(0.00) @db.Decimal(15, 2)
+  asesor2               String?  @db.VarChar(100)
+  empresa2              String?  @db.VarChar(100)
+  comision_asesor3      Decimal? @default(0.00) @db.Decimal(15, 2)
+  porcentaje_comision3  Decimal? @default(0.00000) @db.Decimal(8, 5)
+  pagada_a3             Decimal? @default(0.00) @db.Decimal(15, 2)
+  por_pagar_asesor3     Decimal? @default(0.00) @db.Decimal(15, 2)
+  saldo_a3              Decimal? @default(0.00) @db.Decimal(15, 2)
+  asesor3               String?  @db.VarChar(100)
+  empresa3              String?  @db.VarChar(100)
+  comision_asesor4      Decimal? @default(0.00) @db.Decimal(15, 2)
+  porcentaje_comision4  Decimal? @default(0.00000) @db.Decimal(8, 5)
+  pagada_a4             Decimal? @default(0.00) @db.Decimal(15, 2)
+  por_pagar_asesor4     Decimal? @default(0.00) @db.Decimal(15, 2)
+  saldo_a4              Decimal? @default(0.00) @db.Decimal(15, 2)
+  asesor4               String?  @db.VarChar(100)
+  empresa4              String?  @db.VarChar(100)
+  observaciones         String?  @db.Text
+  comision_sup          Decimal? @default(0.00) @db.Decimal(15, 2)
+  porcentaje_supervisor Decimal? @default(0.00) @db.Decimal(15, 2)
+  pagada_sup            Decimal? @default(0.00) @db.Decimal(15, 2)
+  por_pagar_superv      Decimal? @default(0.00) @db.Decimal(15, 2)
+  saldo_sup             Decimal? @default(0.00) @db.Decimal(15, 2)
+  mes_comision          String?  @db.VarChar(2)
+  anio_comision         String?  @db.VarChar(4)
+  fecha_carga           DateTime @db.DateTime(0)
+  estado                String   @default("") @db.VarChar(50)
+
+  @@index([asesor1], map: "idx_asesor1")
+  @@index([asesor2], map: "idx_asesor2")
+  @@index([asesor3], map: "idx_asesor3")
+  @@index([asesor4], map: "idx_asesor4")
+  @@index([cliente], map: "idx_cliente")
+  @@index([empresa1], map: "idx_empresa1")
+  @@index([empresa2], map: "idx_empresa2")
+  @@index([empresa3], map: "idx_empresa3")
+  @@index([empresa4], map: "idx_empresa4")
+  @@index([fecha_carga], map: "idx_fecha_carga")
+  @@index([mes_comision, anio_comision], map: "idx_mes_anio")
+  @@index([precio_venta], map: "idx_precio_venta")
+  @@index([proyecto], map: "idx_proyecto")
+}
+
+model acomisiones_ventas {
+  id              Int       @id @default(autoincrement())
+  vta_oferta      String?   @db.VarChar(50)
+  vta_fechacompra DateTime? @db.Date
+  vta_cliente     String?   @db.VarChar(200)
+  vta_lugar       String?   @db.VarChar(50)
+  vta_lote        String?   @db.VarChar(80)
+  vta_precio      Decimal?  @db.Decimal(15, 2)
+  vta_tipoventa   String?   @db.VarChar(50)
+  vta_contacto    String?   @db.VarChar(50)
+  vta_asesor1     String?   @db.VarChar(80)
+  vta_ase1empresa String?   @db.VarChar(5)
+  vta_ase1porc    Decimal?  @db.Decimal(10, 4)
+  vta_asesor2     String?   @db.VarChar(80)
+  vta_ase2empresa String?   @db.VarChar(5)
+  vta_ase2porc    Decimal?  @db.Decimal(10, 4)
+  vta_asesor3     String?   @db.VarChar(80)
+  vta_ase3empresa String?   @db.VarChar(5)
+  vta_ase3porc    Decimal?  @db.Decimal(10, 4)
+  vta_asesor4     String?   @db.VarChar(80)
+  vta_ase4empresa String?   @db.VarChar(5)
+  vta_ase4porc    Decimal?  @db.Decimal(10, 4)
+  vta_empresa1    String?   @db.VarChar(5)
+  vta_empporc1    Decimal?  @db.Decimal(10, 2)
+  vta_empresa2    String?   @db.VarChar(5)
+  vta_empporc2    Decimal?  @db.Decimal(10, 2)
+  vta_estado      String?   @db.VarChar(50)
+  vta_compartida  String?   @db.VarChar(5)
+  vta_periodo     Int?
+  vta_creado      DateTime? @db.Date
+}
+
+model activity_logs {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  action    String   @db.VarChar(255)
+  details   String?  @db.Text
+  createdAt DateTime @default(now()) @db.DateTime(6)
+}
+
+model advisor_extra_lots {
+  id           Int      @id @default(autoincrement())
+  advisor_name String   @db.VarChar(255)
+  month        String   @db.VarChar(50)
+  year         Int
+  points       Decimal  @db.Decimal(10, 2)
+  lote         String?  @db.VarChar(255)
+  created_at   DateTime @default(now()) @db.DateTime(6)
+}
+
+model agg_finan_user {
+  id         Int      @id @default(autoincrement())
+  id_finan   Int?
+  id_refinan Int?
+  name       String   @default("") @db.VarChar(50)
+  created_at DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([id_finan], map: "FK__finan_cabec")
+  @@index([id_refinan], map: "FK__refinan_id")
+}
+
+model aperiodos_comisiones {
+  id                  Int                   @id @default(autoincrement())
+  mes                 String                @db.VarChar(2)
+  anio                String                @db.VarChar(4)
+  fecha_carga         DateTime              @db.DateTime(0)
+  acomisiones_detalle acomisiones_detalle[]
+
+  @@unique([mes, anio], map: "mes")
+}
+
+model cot_cabec {
+  id               Int        @id @default(autoincrement())
+  cot_id           Int?
+  init_date        String     @db.VarChar(255)
+  financ_type      String     @db.VarChar(255)
+  cli_name         String     @db.VarChar(255)
+  cli_pry          String     @db.VarChar(255)
+  cli_lote         String     @db.VarChar(255)
+  lote_price       Float
+  lote_mts         Float
+  obsrv            String?    @db.VarChar(255)
+  obsrv2           String?    @db.VarChar(150)
+  obsrv3           String?    @db.VarChar(150)
+  valor_alic       Float
+  total_financ     Float
+  anual_interes    Float
+  no_cuotas        Int
+  discount         Float?
+  extra_discount   Float?
+  promo_discount   Float      @default(0)
+  entrada          Float
+  created_at       DateTime   @default(now())
+  updated_at       DateTime   @default(now())
+  reserva          Float
+  ofrecimientos    String?    @db.VarChar(50)
+  approver_comment String?    @db.VarChar(150)
+  cotizador        cotizador? @relation(fields: [cot_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "cot_cabec_fk1")
+
+  @@index([cot_id], map: "cot_id")
+}
+
+model cot_det {
+  id            Int        @id @default(autoincrement())
+  cot_id        Int?
+  no_cuota      Float      @default(0)
+  fec_pago      String     @default("") @db.VarChar(50)
+  item_pago     String     @db.VarChar(20)
+  capital       Float
+  interes       Float
+  abono_lote    Float
+  alicuota      Float
+  escritura     Decimal    @default(0.000000) @db.Decimal(20, 6)
+  total_pago    Float
+  saldo_capital Float
+  cotizador     cotizador? @relation(fields: [cot_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "cot_det_fk1")
+
+  @@index([cot_id], map: "cot_id")
+}
+
+model cotizador {
+  id             Int         @id @default(autoincrement())
+  fechacot       DateTime    @db.Date
+  proycot        String      @db.VarChar(100)
+  inmcot         String      @db.VarChar(30)
+  preciocot      Float
+  metrajecot     Float
+  clientecot     String      @db.VarChar(100)
+  mailcot        String      @db.VarChar(100)
+  telefcot       String      @db.VarChar(20)
+  celcot         String      @db.VarChar(20)
+  preciocotizado String      @db.VarChar(50)
+  entradacot     String      @db.VarChar(50)
+  interescot     Float
+  plazocot       String      @db.VarChar(50)
+  cuotascot      String      @db.VarChar(50)
+  tipcot         String      @db.VarChar(25)
+  asescot        String      @db.VarChar(100)
+  entr1cot       Float
+  entr2cot       Float
+  entr3cot       Float
+  entr4cot       Float
+  cot_cabec      cot_cabec[]
+  cot_det        cot_det[]
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model ctbccc {
+  ccc_codccc String?  @db.VarChar(10)
+  ccc_numniv String?  @db.VarChar(2)
+  ccc_codcta String?  @db.VarChar(50)
+  ccc_nonbre String?  @db.VarChar(25)
+  ccc_nombre String?  @db.VarChar(25)
+  ccc_codctr Int?     @db.UnsignedTinyInt
+  ccc_valor  Decimal? @db.Decimal(12, 2)
+  ccc_salini Decimal? @db.Decimal(14, 2)
+  ccc_ajuste Decimal? @db.Decimal(14, 2)
+  ccc_salaju Decimal? @db.Decimal(12, 2)
+
+  @@index([ccc_codccc, ccc_codcta], map: "ix_ctbccc1")
+  @@ignore
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model d_depositos {
+  id                 Int       @id @default(autoincrement())
+  recibo             String    @default("0") @db.VarChar(255)
+  valor              String    @default("0") @db.VarChar(255)
+  banco              String    @default("0") @db.VarChar(255)
+  tipo               String    @default("0") @db.VarChar(255)
+  fecha_act          DateTime? @db.Date
+  observaciones      String    @default("0") @db.VarChar(255)
+  estado             String    @default("0") @db.VarChar(255)
+  coment_reject      String    @default("0") @db.VarChar(255)
+  hash_comprobante   String?   @db.VarChar(255)
+  name_comprobante   String?   @db.VarChar(255)
+  url_comprobante    String?   @db.VarChar(255)
+  fecha_carga        DateTime? @db.Date
+  lote               String    @default("0") @db.VarChar(255)
+  idUser             String    @default("0") @db.VarChar(255)
+  cli_name           String    @default("0") @db.VarChar(255)
+  created_at         DateTime? @default(now()) @db.Timestamp(0)
+  rec_asociado       String?   @db.VarChar(255)
+  resumen            String?   @db.LongText
+  banco_origen       String?   @db.VarChar(255)
+  numero_transaccion String?   @db.VarChar(255)
+  monto_pagado       String?   @db.VarChar(255)
+}
+
+model depositos_comprobante {
+  id           Int    @id @default(autoincrement())
+  name         String @default("") @db.VarChar(255)
+  url          String @default("") @db.VarChar(255)
+  hash         String @default("") @db.VarChar(50)
+  depositos_id Int
+
+  @@index([depositos_id], map: "FK__d_depositos")
+}
+
+model double_lots {
+  id           Int          @id @default(autoincrement())
+  process_id   Int          @unique(map: "UQ_double_lots_process_id")
+  created_at   DateTime     @default(now()) @db.DateTime(6)
+  sale_process sale_process @relation(fields: [process_id], references: [id], onDelete: Cascade, map: "FK_double_lots_process")
+}
+
+model encuesta_calidad {
+  id           Int          @id @default(autoincrement())
+  id_process   Int
+  P1           Int
+  P2           Int
+  P3           Int
+  P4           Int
+  P5           Int
+  sale_process sale_process @relation(fields: [id_process], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "encuesta_calidad_ibfk_1")
+
+  @@index([id_process], map: "id_process")
+}
+
+model entr_process {
+  id            Int             @id @default(autoincrement())
+  ofert_id      Int?
+  entr_fech     DateTime?       @db.Date
+  entr_hora     DateTime?       @db.Time(0)
+  entr_encarg   String?         @db.VarChar(60)
+  comments      String?         @db.VarChar(150)
+  ref1          String?         @db.VarChar(50)
+  ref2          String?         @db.VarChar(50)
+  ref3          String?         @db.VarChar(50)
+  created_at    DateTime?       @default(now()) @db.DateTime(0)
+  updated_at    DateTime?       @default(now()) @db.DateTime(0)
+  huerto        String?         @db.VarChar(5)
+  tanque        String?         @db.VarChar(5)
+  tag           String?         @db.VarChar(5)
+  extras        String?         @db.VarChar(100)
+  ofertas       ofertas?        @relation(fields: [ofert_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "entr_process_ibfk_1")
+  entr_reagend  entr_reagend[]
+  lote_entr     lote_entr[]
+  lote_pre_entr lote_pre_entr[]
+
+  @@index([ofert_id], map: "ofert_id")
+}
+
+model entr_reagend {
+  id           Int          @id @default(autoincrement())
+  p_id         Int
+  last_date    DateTime     @db.Date
+  new_date     DateTime     @db.Date
+  last_time    DateTime     @db.Time(0)
+  new_time     DateTime     @db.Time(0)
+  created_at   DateTime     @default(now()) @db.DateTime(0)
+  updated_at   DateTime     @default(now()) @db.DateTime(0)
+  reason       String?      @db.VarChar(100)
+  entr_process entr_process @relation(fields: [p_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_entr_reagend_entr_process")
+
+  @@index([p_id], map: "FK_entr_reagend_entr_process")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model excluded_advisor {
+  id           Int?
+  advisor_name String?  @db.VarChar(255)
+  offer_id     Int?
+  ofertas      ofertas? @relation(fields: [offer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__ofertas")
+
+  @@index([offer_id], map: "FK__ofertas")
+  @@ignore
+}
+
+model finan_cabec {
+  id               Int          @id @default(autoincrement())
+  process_id       Int
+  init_date        String       @db.VarChar(255)
+  financ_type      String       @db.VarChar(255)
+  cli_name         String       @db.VarChar(255)
+  cli_pry          String       @db.VarChar(255)
+  cli_lote         String       @db.VarChar(255)
+  lote_price       Float
+  lote_mts         Float
+  obsrv            String?      @db.VarChar(255)
+  obsrv2           String?      @db.VarChar(255)
+  obsrv3           String?      @db.VarChar(255)
+  valor_alic       Float
+  total_financ     Float
+  anual_interes    Float
+  no_cuotas        Int
+  discount         Float?
+  extra_discount   Float?
+  promo_discount   Float        @default(0)
+  entrada          Float
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @default(now())
+  reserva          Float
+  ofrecimientos    String?      @db.VarChar(50)
+  approver_comment String?      @db.VarChar(150)
+  sale_process     sale_process @relation(fields: [process_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "finan_cabec_ibfk_1")
+
+  @@index([process_id], map: "process_id")
+}
+
+model finan_det {
+  id            Int           @id @default(autoincrement())
+  process_id    Int?
+  no_cuota      Float         @default(0)
+  fec_pago      String        @default("") @db.VarChar(50)
+  item_pago     String        @db.VarChar(20)
+  capital       Float
+  interes       Float
+  abono_lote    Float
+  alicuota      Float
+  escritura     Decimal       @default(0.000000) @db.Decimal(20, 6)
+  total_pago    Float
+  saldo_capital Float
+  sale_process  sale_process? @relation(fields: [process_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "finan_det_ibfk_1")
+
+  @@index([process_id], map: "process_id")
+}
+
+model holidays {
+  id                  Int       @id @default(autoincrement())
+  dateS               DateTime? @db.Date
+  dateE               DateTime? @db.Date
+  departmentSoliciter String?   @db.VarChar(255)
+  details             String?   @db.Text
+  requestedDays       Int?
+  soliciter           String?   @db.VarChar(255)
+  state               String?   @db.VarChar(255)
+  type                String?   @db.VarChar(255)
+  observation         String?   @db.Text
+  approvedDays        Int?
+  holidaysPeriod      String?   @db.Text
+  aprovedDate         DateTime? @db.DateTime(0)
+  created_at          DateTime? @default(now()) @db.Timestamp(0)
+  user                user?     @relation(fields: [soliciter], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "holidays_ibfk_1")
+
+  @@index([soliciter], map: "soliciter")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model inventario {
+  mae_codproy        String?   @db.VarChar(20)
+  mae_proyecto       String?   @db.VarChar(100)
+  mae_codinv         String?   @db.VarChar(50)
+  mae_estado         String?   @db.VarChar(50)
+  mae_hipotecado     String?   @db.VarChar(20)
+  mae_numfactura     String?   @db.VarChar(50)
+  mae_aniofactura    String?   @db.VarChar(50)
+  mae_descripcion    String?   @db.VarChar(250)
+  mae_pvp            Decimal?  @db.Decimal(21, 6)
+  mae_costo          Decimal?  @db.Decimal(21, 6)
+  mae_areautil       Decimal?  @db.Decimal(21, 6)
+  mae_areaproteccion Decimal?  @db.Decimal(21, 6)
+  mae_areatotal      Decimal?  @db.Decimal(21, 6)
+  mae_observ         String?   @db.VarChar(250)
+  mae_fecact         DateTime? @db.Date
+  mae_fecmod         DateTime? @db.DateTime(0)
+  mae_obsmodif       String?   @db.VarChar(200)
+  mae_fichacatastral String?   @db.VarChar(200)
+  mae_predio         String?   @db.VarChar(200)
+
+  @@index([mae_codinv], map: "ix_invmae3")
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model inventario_arch {
+  id  Int?
+  url String? @db.VarChar(200)
+
+  @@ignore
+}
+
+model inventario_mod {
+  id                  Int       @id @default(autoincrement())
+  mae_codinv          String?   @db.VarChar(50)
+  mod_accionanterior  String?   @db.VarChar(80)
+  mod_accionactual    String?   @db.VarChar(80)
+  mod_fechamod        DateTime? @db.DateTime(0)
+  mod_fechaant        DateTime? @db.DateTime(0)
+  mod_observacion     String?   @db.VarChar(200)
+  mod_precio_anterior Decimal?  @db.Decimal(12, 2)
+  mod_precio_actual   Decimal?  @db.Decimal(12, 2)
+  mod_obser_manual    String?   @db.VarChar(255)
+  mod_user            String?   @db.VarChar(50)
+
+  @@index([mae_codinv], map: "mae_codinv")
+}
+
+model lote_entr {
+  id            Int           @id @default(autoincrement())
+  p_id          Int?
+  entr_fech     DateTime?     @db.Date
+  entr_hora     DateTime?     @db.Time(0)
+  entr_encarg   String?       @db.VarChar(60)
+  check_naranj  String?       @db.VarChar(5)
+  check_tarjet  String?       @db.VarChar(5)
+  check_foto    String?       @db.VarChar(5)
+  check_taging  String?       @db.VarChar(5)
+  check_revhuer String?       @db.VarChar(5)
+  check_revtanq String?       @db.VarChar(5)
+  check_revllav String?       @db.VarChar(5)
+  entr_estado   String?       @db.VarChar(20)
+  entr_observ   String?       @db.VarChar(200)
+  created_at    DateTime?     @default(now()) @db.DateTime(0)
+  updated_at    DateTime?     @default(now()) @db.DateTime(0)
+  entr_process  entr_process? @relation(fields: [p_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "lote_entr_ibfk_1")
+
+  @@index([p_id], map: "p_id")
+}
+
+model lote_pre_entr {
+  id             Int           @id @default(autoincrement())
+  p_id           Int?
+  insp_fech      DateTime?     @db.Date
+  insp_encar     String?       @db.VarChar(40)
+  check_limp     String?       @db.VarChar(5)
+  check_tanque   String?       @db.VarChar(5)
+  check_huerto   String?       @db.VarChar(5)
+  check_llave    String?       @db.VarChar(5)
+  check_linderos String?       @db.VarChar(5)
+  insp_estado    String?       @db.VarChar(20)
+  insp_observ    String?       @db.VarChar(150)
+  created_at     DateTime?     @default(now()) @db.DateTime(0)
+  updated_at     DateTime?     @default(now()) @db.DateTime(0)
+  entr_process   entr_process? @relation(fields: [p_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "lote_pre_entr_ibfk_1")
+
+  @@index([p_id], map: "p_id")
+}
+
+model ofertaMama {
+  id               Int           @id @default(autoincrement())
+  id_process       Int?
+  status           String?       @db.VarChar(255)
+  fecha_entrega    DateTime?     @db.Date
+  regalo_entregado String?       @db.VarChar(255)
+  sale_process     sale_process? @relation(fields: [id_process], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "ofertamama_ibfk_1")
+
+  @@index([id_process], map: "id_process")
+}
+
+model ofertas {
+  cli_name                String?            @db.VarChar(255)
+  cli_representante       String?            @db.VarChar(500)
+  cli_representanteID     String?            @db.VarChar(500)
+  cli_name2               String?            @db.VarChar(500)
+  cli_name2ID             String?            @db.VarChar(500)
+  cli_tipoInmueble        String?            @db.VarChar(255)
+  cli_estadoCivil         String?            @db.VarChar(255)
+  cli_motivoCompra        String?            @db.VarChar(255)
+  cli_id                  String?            @db.VarChar(13)
+  cli_nacionalidad        String             @db.VarChar(100)
+  cli_sectorT             String             @db.VarChar(100)
+  cli_ciudadT             String             @db.VarChar(100)
+  relacion1               String             @db.VarChar(100)
+  relacion2               String             @db.VarChar(100)
+  relacion3               String             @db.VarChar(100)
+  detalleRelacion1        String             @db.VarChar(100)
+  detalleRelacion2        String             @db.VarChar(100)
+  detalleRelacion3        String             @db.VarChar(100)
+  cli_nacionalidadR       String             @db.VarChar(100)
+  cli_estadoCivilR        String             @db.VarChar(100)
+  cli_direccR             String             @db.VarChar(100)
+  cli_sectorR             String             @db.VarChar(100)
+  cli_ciudadR             String             @db.VarChar(100)
+  cli_telefR              String             @db.VarChar(100)
+  cli_trabajoR            String             @db.VarChar(100)
+  cli_cargoR              String             @db.VarChar(100)
+  cli_direccTR            String             @db.VarChar(100)
+  cli_sectorTR            String             @db.VarChar(100)
+  cli_ciudadTR            String             @db.VarChar(100)
+  cli_telefTR             String             @db.VarChar(100)
+  intermediarioR1         String             @db.VarChar(100)
+  intermediario_nameR     String             @db.VarChar(100)
+  intermediario_idR       String             @db.VarChar(100)
+  intermediarioR2         String             @db.VarChar(100)
+  ingresoAnual            String             @db.VarChar(100)
+  patrimonio              String             @db.VarChar(100)
+  fuenteIngresos          String             @db.VarChar(100)
+  fuentePatrimonio        String             @db.VarChar(100)
+  banco1                  String             @db.VarChar(100)
+  banco2                  String             @db.VarChar(100)
+  cuenta1                 String             @db.VarChar(100)
+  cuenta2                 String             @db.VarChar(100)
+  refComercial1           String             @db.VarChar(100)
+  refComercial2           String             @db.VarChar(100)
+  monto1                  String             @db.VarChar(100)
+  monto2                  String             @db.VarChar(100)
+  tipo_transacc1          String             @db.VarChar(100)
+  tipo_transacc2          String             @db.VarChar(100)
+  transacc_cuenta1        String             @db.VarChar(100)
+  transacc_cuenta2        String             @db.VarChar(100)
+  declaracionFondos1      String             @db.VarChar(100)
+  declaracionFondos2      String             @db.VarChar(100)
+  declaracionFondos3      String             @db.VarChar(100)
+  declaracionFondos4      String             @db.VarChar(100)
+  fechaCreacion           String?            @db.VarChar(50)
+  cli_sexo                String?            @db.VarChar(50)
+  cli_fecNac              String?            @db.VarChar(50)
+  cli_provin              String?            @db.VarChar(50)
+  cli_ciudad              String?            @db.VarChar(50)
+  cli_sector              String?            @db.VarChar(50)
+  cli_direcc              String?            @db.VarChar(200)
+  cli_telef               String?            @db.VarChar(50)
+  cli_cell                String?            @db.VarChar(50)
+  cli_mail                String             @db.VarChar(50)
+  cli_ingresos            Decimal?           @db.Decimal(20, 6)
+  cli_gastos              Decimal?           @db.Decimal(20, 6)
+  cli_ahorroM             Decimal?           @db.Decimal(20, 6)
+  cli_ahorroA             Decimal?           @db.Decimal(20, 6)
+  cli_trabajo             String?            @db.VarChar(100)
+  cli_cargoT              String?            @db.VarChar(100)
+  cli_direccT             String?            @db.VarChar(200)
+  cli_telefT              String?            @db.VarChar(50)
+  cli_reFami1             String?            @db.VarChar(200)
+  cli_paren1              String?            @db.VarChar(200)
+  cli_telParen1           String?            @db.VarChar(50)
+  cli_cellParen1          String?            @db.VarChar(50)
+  cli_reFami2             String?            @db.VarChar(200)
+  cli_paren2              String?            @db.VarChar(200)
+  cli_telParen2           String?            @db.VarChar(50)
+  cli_cellParen2          String?            @db.VarChar(50)
+  cli_conyuName           String?            @db.VarChar(200)
+  cli_conyuID             String?            @db.VarChar(13)
+  cli_conyuCell           String?            @db.VarChar(50)
+  cli_conyuTrab           String?            @db.VarChar(100)
+  cli_conyuDireccT        String?            @db.VarChar(100)
+  cli_conyuTelT           String?            @db.VarChar(50)
+  cli_refName1            String?            @db.VarChar(100)
+  cli_refTel1             String?            @db.VarChar(50)
+  cli_refName2            String?            @db.VarChar(100)
+  cli_refTel2             String?            @db.VarChar(50)
+  cli_refName3            String?            @db.VarChar(100)
+  cli_refTel3             String?            @db.VarChar(50)
+  cli_asesor              String?            @db.VarChar(500)
+  cli_asesorTelf          String?            @db.VarChar(50)
+  cli_tipoVenta           String?            @db.VarChar(50)
+  cli_contac              String?            @db.VarChar(50)
+  cli_state               String?            @db.VarChar(50)
+  cli_observation         String?            @db.VarChar(500)
+  cli_ofrecimiento        String?            @db.VarChar(500)
+  encuesta_pr1            String?            @db.VarChar(500)
+  encuesta_pr2            String?            @db.VarChar(500)
+  encuesta_pr3            String?            @db.VarChar(500)
+  encuesta_pr4            String?            @db.VarChar(500)
+  cli_valorOferta         Decimal?           @db.Decimal(10, 2)
+  cli_porcentaje          String?            @db.VarChar(50)
+  cli_descuento           Float?             @db.Float
+  cli_descuentoAdd        Float?             @db.Float
+  promo_discount          Float              @default(0)
+  cli_totalOferta         Decimal?           @db.Decimal(10, 2)
+  id                      Int                @id @default(autoincrement())
+  mae_codinv              String             @db.VarChar(15)
+  soliciter               String?            @db.VarChar(100)
+  ofert_location          String?            @db.VarChar(50)
+  ofert_type              String?            @default("venta_nueva") @db.VarChar(30)
+  cli_pais                String?            @db.VarChar(255)
+  prospectador            String?            @db.VarChar(255)
+  aproyecto               Int?
+  user                    String?            @db.VarChar(36)
+  entr_process            entr_process[]
+  excluded_advisor        excluded_advisor[] @ignore
+  user_ofertas_userTouser user?              @relation("ofertas_userTouser", fields: [user], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "ofertas_ibfk_1")
+
+  @@index([user], map: "user")
+}
+
+model permissions {
+  id                  Int       @id @default(autoincrement())
+  dateS               DateTime? @db.Date
+  departmentSoliciter String?   @db.VarChar(255)
+  details             String?   @db.Text
+  finalTime           DateTime? @db.Time(0)
+  observation         String?   @db.Text
+  requestedHour       String?   @db.VarChar(255)
+  soliciter           String?   @db.VarChar(255)
+  startTime           DateTime? @db.Time(0)
+  state               String?   @db.VarChar(100)
+  typePermissions     String?   @db.VarChar(255)
+  aprovedDate         DateTime? @db.DateTime(0)
+  created_at          DateTime? @default(now()) @db.Timestamp(0)
+  user                user?     @relation(fields: [soliciter], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "permissions_ibfk_1")
+
+  @@index([soliciter], map: "soliciter")
+  @@index([typePermissions], map: "typePermission")
+}
+
+model prestamos {
+  id                  Int       @id @default(autoincrement())
+  cobroM              String?   @db.VarChar(255)
+  plazos              String?   @db.VarChar(255)
+  dateState           DateTime? @db.Date
+  departmentSoliciter String?   @db.VarChar(255)
+  observation         String?   @db.VarChar(255)
+  cargo               String?   @db.VarChar(255)
+  soliciter           String?   @db.VarChar(255)
+  state               String?   @db.VarChar(100)
+  type                String?   @db.VarChar(100)
+  created_at          DateTime? @default(now()) @db.Timestamp(0)
+  valor               Float?    @db.Float
+  user                user?     @relation(fields: [soliciter], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "prestamos_ibfk_1")
+
+  @@index([soliciter], map: "soliciter")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model proyecto {
+  cod_pro Int
+  nombre  String @db.VarChar(45)
+  estado  String @db.VarChar(45)
+
+  @@ignore
+}
+
+model refinancian_cabec {
+  id                         Int                  @id @default(autoincrement())
+  created_at                 DateTime             @default(now()) @db.Timestamp(0)
+  total_financ               Decimal              @default(0.00) @db.Decimal(12, 2)
+  anual_interes              Decimal              @default(0.000000) @db.Decimal(8, 6)
+  no_cuotas                  Int                  @default(0)
+  init_date                  DateTime             @default(dbgenerated("'0000-00-00'")) @db.Date
+  financ_type                String               @default("0") @db.VarChar(50)
+  cli_name                   String               @default("0") @db.VarChar(255)
+  cli_pry                    String               @default("0") @db.VarChar(255)
+  cli_lote                   String               @default("0") @db.VarChar(255)
+  lote_price                 Decimal              @default(0.00) @db.Decimal(12, 2)
+  lote_mts                   Decimal              @default(0.00) @db.Decimal(8, 2)
+  obsrv                      String?              @db.Text
+  obsrv2                     String?              @db.Text
+  obsrv3                     String?              @db.Text
+  valor_alic                 Decimal              @db.Decimal(8, 2)
+  discount                   Decimal              @db.Decimal(8, 2)
+  extra_discount             Decimal              @db.Decimal(8, 2)
+  entrada                    Decimal              @db.Decimal(12, 2)
+  abono_capital              Decimal              @db.Decimal(12, 2)
+  original_financiamiento_id Int?
+  desembolsoBiess            Decimal              @db.Decimal(12, 2)
+  abonos_realizados          Decimal              @db.Decimal(12, 2)
+  adicionales                Decimal              @db.Decimal(12, 2)
+  ofrecimientos              String               @db.VarChar(255)
+  process_id                 Int?
+  promo_discount             Decimal?             @db.Decimal(12, 2)
+  status                     String?              @default("PENDIENTE") @db.VarChar(50)
+  refinancian_detall         refinancian_detall[]
+}
+
+model refinancian_detall {
+  id                Int               @id @default(autoincrement())
+  process_id        Int?              @default(0)
+  no_cuota          Float
+  fec_pago          String            @default("") @db.VarChar(50)
+  item_pago         String            @default("") @db.VarChar(20)
+  capital           Float             @default(0)
+  interes           Float             @default(0)
+  abono_lote        Float             @default(0)
+  alicuota          Float             @default(0)
+  escritura         Decimal           @default(0.000000) @db.Decimal(20, 6)
+  total_pago        Float             @default(0)
+  saldo_capital     Float             @default(0)
+  id_cabec_refinan  Int               @default(0)
+  comentario        String?           @default("0") @db.VarChar(255)
+  refinancian_cabec refinancian_cabec @relation(fields: [id_cabec_refinan], references: [id], onDelete: Cascade, map: "FK__refinancian_cabec")
+  sale_process      sale_process?     @relation(fields: [process_id], references: [id], onDelete: Cascade, map: "FK__sale_process")
+
+  @@index([id_cabec_refinan], map: "FK__refinancian_cabec")
+  @@index([process_id], map: "FK__sale_process")
+}
+
+model res_clientes {
+  id_cliente        Int       @id @default(autoincrement())
+  res_proyecto      String?   @db.VarChar(100)
+  res_inmueble      String?   @db.VarChar(50)
+  res_codcli        String?   @db.VarChar(15)
+  res_nombre        String?   @db.VarChar(100)
+  res_cedula        String?   @db.VarChar(15)
+  res_fechaing      DateTime? @db.Date
+  res_entregado     DateTime? @db.Date
+  res_estado        String?   @db.VarChar(10)
+  res_status        String?   @db.VarChar(5)
+  columna_timestamp DateTime  @default(now()) @db.Timestamp(0)
+}
+
+model retiro_otros_gastos {
+  id         Int      @id @default(autoincrement())
+  id_retiros Int
+  name       String   @db.VarChar(255)
+  created_at DateTime @default(now()) @db.DateTime(6)
+  updated_at DateTime @default(now()) @db.DateTime(6)
+  valor      Float    @default(0.00)
+}
+
+model retiros {
+  id                  Int       @id @default(autoincrement())
+  cli_name            String    @db.VarChar(255)
+  created_at          DateTime  @default(now()) @db.DateTime(6)
+  updated_at          DateTime  @default(now()) @db.DateTime(6)
+  fech_aproved        DateTime? @db.DateTime(6)
+  fech_abono_capita   DateTime? @db.DateTime(6)
+  n_cuotas_devolver   Int?
+  razon               String    @db.VarChar(255)
+  cli_lote            String    @db.VarChar(255)
+  cli_proyecto        String    @db.VarChar(255)
+  val_inmueble        Decimal?  @db.Decimal(15, 2)
+  abono_capital       Decimal?  @db.Decimal(15, 2)
+  anti_escritura      Decimal?  @db.Decimal(15, 2)
+  dmora               Decimal?  @db.Decimal(15, 2)
+  total_abono         Decimal?  @db.Decimal(15, 2)
+  total_descuentos    Decimal?  @db.Decimal(15, 2)
+  total_otros         Decimal?  @db.Decimal(15, 2)
+  total_multas        Decimal?  @db.Decimal(15, 2)
+  val_devolucion      Decimal?  @db.Decimal(15, 2)
+  aproved             Int       @default(0) @db.TinyInt
+  status              String    @default("PENDIENTE") @db.VarChar(255)
+  fech_anti_escritura DateTime? @db.DateTime(0)
+  fecha_firma         DateTime? @db.DateTime(0)
+  superficie_lote     Decimal?  @db.Decimal(15, 2)
+  observ              String?   @db.Text
+  observ2             String?   @db.Text
+  observ3             String?   @db.Text
+  aplic_ncredito      Int?
+  val_ncredito        Decimal?  @db.Decimal(15, 2)
+}
+
+model retiros_multas {
+  id         Int      @id @default(autoincrement())
+  id_retiros Int
+  name       String   @db.VarChar(255)
+  valor      Float    @default(0.00)
+  created_at DateTime @default(now()) @db.DateTime(6)
+  updated_at DateTime @default(now()) @db.DateTime(6)
+}
+
+model retiros_val_devolver {
+  id         Int      @id @default(autoincrement())
+  id_retiros Int
+  fecha      DateTime @default(now()) @db.DateTime(6)
+  valor      Float    @default(0.00)
+  updated_at DateTime @default(now()) @db.DateTime(6)
+}
+
+model sale_paymnt {
+  id           Int           @id @default(autoincrement())
+  process_id   Int?
+  no_cuenta    String        @db.VarChar(25)
+  valor_total  Float
+  fec_pago     String        @db.VarChar(30)
+  no_recibo    String?       @db.VarChar(20)
+  detalle      String        @db.VarChar(50)
+  fec_pagpr    String        @db.VarChar(20)
+  ref_pago     String?       @db.VarChar(30)
+  comentario   String?       @db.VarChar(100)
+  cli_name     String        @db.VarChar(50)
+  cli_lote     String        @db.VarChar(15)
+  cli_pry      String        @db.VarChar(20)
+  tipo_pago    String        @db.VarChar(30)
+  img_url      String?       @db.VarChar(150)
+  created_at   DateTime      @default(now())
+  updated_at   DateTime      @default(now())
+  sale_process sale_process? @relation(fields: [process_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sale_paymnt_ibfk_1")
+
+  @@index([process_id], map: "process_id")
+}
+
+model sale_process {
+  id                                            Int                  @id @default(autoincrement())
+  username                                      String?              @db.VarChar(30)
+  cli_name                                      String               @db.VarChar(100)
+  cli_identif                                   String               @db.VarChar(15)
+  cli_estcivil                                  String               @db.VarChar(5)
+  cli_fecnac                                    DateTime             @db.Date
+  cli_asesor                                    String               @db.VarChar(200)
+  cli_sexo                                      String               @db.VarChar(5)
+  cli_nacion                                    String               @db.VarChar(25)
+  cli_pry                                       String               @db.VarChar(50)
+  cli_lote                                      String               @db.VarChar(20)
+  lote_price                                    Float
+  lote_mts                                      Float
+  is_joined                                     Int                  @db.TinyInt
+  is_table_done                                 Int                  @db.TinyInt
+  is_offert_done                                Int                  @db.TinyInt
+  is_licit_done                                 Int                  @db.TinyInt
+  is_payment_done                               Int                  @db.TinyInt
+  date                                          DateTime?            @db.Date
+  offert_id                                     Int?
+  finan_status                                  String               @db.VarChar(20)
+  offert_status                                 String               @db.VarChar(20)
+  payment_status                                String               @db.VarChar(20)
+  finan_approved_by                             String               @db.VarChar(30)
+  offert_approved_by                            String               @db.VarChar(30)
+  payment_approved_by                           String               @db.VarChar(30)
+  sup_venta                                     String               @db.VarChar(20)
+  location                                      String?              @db.VarChar(30)
+  created_at                                    DateTime             @default(now())
+  updated_at                                    DateTime             @default(now())
+  user                                          String?              @db.VarChar(36)
+  user_payment_approved                         String?              @db.VarChar(36)
+  user_offert_approved                          String?              @db.VarChar(36)
+  user_finan_approved                           String?              @db.VarChar(36)
+  double_lots                                   double_lots?
+  encuesta_calidad                              encuesta_calidad[]
+  finan_cabec                                   finan_cabec[]
+  finan_det                                     finan_det[]
+  ofertaMama                                    ofertaMama[]
+  refinancian_detall                            refinancian_detall[]
+  sale_paymnt                                   sale_paymnt[]
+  user_sale_process_userTouser                  user?                @relation("sale_process_userTouser", fields: [user], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sale_process_ibfk_1")
+  user_sale_process_user_payment_approvedTouser user?                @relation("sale_process_user_payment_approvedTouser", fields: [user_payment_approved], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sale_process_ibfk_2")
+  user_sale_process_user_offert_approvedTouser  user?                @relation("sale_process_user_offert_approvedTouser", fields: [user_offert_approved], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sale_process_ibfk_3")
+  user_sale_process_user_finan_approvedTouser   user?                @relation("sale_process_user_finan_approvedTouser", fields: [user_finan_approved], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sale_process_ibfk_4")
+
+  @@index([user], map: "user")
+  @@index([user_finan_approved], map: "user_finan_approved")
+  @@index([user_offert_approved], map: "user_offert_approved")
+  @@index([user_payment_approved], map: "user_payment_approved")
+}
+
+model session {
+  id             String   @id @db.VarChar(36)
+  expiresAt      DateTime @db.Timestamp(3)
+  token          String   @unique(map: "token") @db.VarChar(255)
+  createdAt      DateTime @default(now()) @db.Timestamp(3)
+  updatedAt      DateTime @db.Timestamp(3)
+  ipAddress      String?  @db.Text
+  userAgent      String?  @db.Text
+  userId         String   @db.VarChar(36)
+  impersonatedBy String?  @db.Text
+  user           user     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "session_ibfk_1")
+
+  @@index([userId])
+}
+
+model twoFactor {
+  id          String   @id @db.VarChar(36)
+  secret      String   @db.VarChar(255)
+  backupCodes String   @db.Text
+  userId      String   @db.VarChar(36)
+  verified    Boolean?
+  user        user     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "twofactor_ibfk_1")
+
+  @@index([secret])
+  @@index([userId])
+}
+
+model urgentSale {
+  id            Int       @id @default(autoincrement())
+  userSoliciter String?   @db.VarChar(255)
+  lote          String?   @db.VarChar(255)
+  used          Boolean?  @default(false)
+  create_at     DateTime? @default(now()) @db.Timestamp(0)
+  user          user?     @relation(fields: [userSoliciter], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "urgentsale_ibfk_1")
+
+  @@index([userSoliciter], map: "userSoliciter")
+}
+
+model user {
+  id                                                    String         @id @db.VarChar(36)
+  name                                                  String         @db.VarChar(255)
+  email                                                 String         @unique(map: "email") @db.VarChar(255)
+  emailVerified                                         Boolean
+  image                                                 String?        @db.Text
+  createdAt                                             DateTime       @default(now()) @db.Timestamp(3)
+  updatedAt                                             DateTime       @default(now()) @db.Timestamp(3)
+  role                                                  String?        @db.Text
+  banned                                                Boolean?
+  banReason                                             String?        @db.Text
+  banExpires                                            DateTime?      @db.Timestamp(3)
+  twoFactorEnabled                                      Boolean?
+  permissions                                           String?        @db.Text
+  activo                                                Boolean?       @default(true)
+  fechaIngreso                                          DateTime?      @db.Date
+  diasAumentados                                        Int?
+  diasDescontados                                       Int?
+  diasVacaciones                                        Int?
+  anosTrabajados                                        Int?
+  cargo                                                 String?        @db.VarChar(255)
+  departamento                                          String?        @db.VarChar(255)
+  empresa                                               String?        @db.VarChar(255)
+  account                                               account[]
+  holidays                                              holidays[]
+  ofertas_ofertas_userTouser                            ofertas[]      @relation("ofertas_userTouser")
+  permissionRequests                                    permissions[]
+  prestamos                                             prestamos[]
+  sale_process_sale_process_userTouser                  sale_process[] @relation("sale_process_userTouser")
+  sale_process_sale_process_user_payment_approvedTouser sale_process[] @relation("sale_process_user_payment_approvedTouser")
+  sale_process_sale_process_user_offert_approvedTouser  sale_process[] @relation("sale_process_user_offert_approvedTouser")
+  sale_process_sale_process_user_finan_approvedTouser   sale_process[] @relation("sale_process_user_finan_approvedTouser")
+  session                                               session[]
+  twoFactor                                             twoFactor[]
+  urgentSale                                            urgentSale[]
+
+  // --- Relaciones de las tablas nuevas de esta app (ver bloque al final del archivo) ---
+  rolesApp                                               UsuarioRol[]
+  permisosApp                                            UsuarioPermiso[]
+}
+
+model verification {
+  id         String   @id @db.VarChar(36)
+  identifier String   @db.VarChar(255)
+  value      String   @db.Text
+  expiresAt  DateTime @db.Timestamp(3)
+  createdAt  DateTime @default(now()) @db.Timestamp(3)
+  updatedAt  DateTime @default(now()) @db.Timestamp(3)
+
+  @@index([identifier])
+}
+
+// ============================================================================
+// TABLAS NUEVAS DE ESTA APP (fase 0 — cimientos)
+// ----------------------------------------------------------------------------
+// La identidad del usuario sigue viviendo en la tabla legacy `user` (arriba):
+// no se crea una tabla "Usuario" separada. Todo lo de aqui es 100% aditivo,
+// mapeado con @@map(..._app) para no chocar nunca con nombres de tablas legacy.
+// El login es solo el de better-auth (anconAPI) — el login propio que tenia esta
+// app (modelos CredencialAcceso/Sesion, tablas credenciales_acceso/sesiones_app) se
+// quito; esas tablas pueden seguir existiendo en la base, ya sin uso.
+// ============================================================================
+
+model Rol {
+  id          String   @id @default(cuid())
+  nombre      String   @unique
+  descripcion String?
+  createdAt   DateTime @default(now())
+
+  usuarios UsuarioRol[]
+  permisos RolPermiso[]
+
+  @@map("roles_app")
+}
+
+// Tabla puente user<->Rol. Un usuario puede tener mas de un rol.
+model UsuarioRol {
+  usuarioId String @db.VarChar(36)
+  rolId     String
+
+  usuario user @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  rol     Rol  @relation(fields: [rolId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, rolId])
+  @@map("usuarios_roles_app")
+}
+
+// Permiso = accion posible sobre un recurso de negocio (ej. recurso "lote", accion "aprobar").
+// Los recursos no tienen modelo propio todavia: son solo strings hasta que se construya el modulo real.
+model Permiso {
+  id      String @id @default(cuid())
+  recurso String
+  accion  String
+
+  roles     RolPermiso[]
+  usuarios  UsuarioPermiso[]
+
+  @@unique([recurso, accion])
+  @@map("permisos_app")
+}
+
+// Tabla puente Rol<->Permiso.
+model RolPermiso {
+  rolId     String
+  permisoId String
+
+  rol     Rol     @relation(fields: [rolId], references: [id], onDelete: Cascade)
+  permiso Permiso @relation(fields: [permisoId], references: [id], onDelete: Cascade)
+
+  @@id([rolId, permisoId])
+  @@map("roles_permisos_app")
+}
+
+// Override por usuario: concede o deniega un permiso puntual, aparte de sus roles.
+// `modo` = "conceder" (se suma aunque ningun rol lo de) o "denegar" (se resta aunque un
+// rol lo diera). El string plano compilado = (union de roles) + concedidos - denegados.
+model UsuarioPermiso {
+  usuarioId String @db.VarChar(36)
+  permisoId String
+  modo      String @db.VarChar(16)
+
+  usuario user    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  permiso Permiso @relation(fields: [permisoId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, permisoId])
+  @@map("usuarios_permisos_app")
+}
+
+
+
+// Modo mantenimiento de la intranet: una sola fila (id = 1) que se edita desde
+// /configuracion/mantenimiento. `modo` = "aviso" (banner arriba, se puede seguir
+// trabajando) o "bloqueo" (pantalla de mantenimiento para todos menos Administrador).
+// La tabla se crea a mano — ver prisma/sql/mantenimiento_app.sql.
+model Mantenimiento {
+  id               Int      @id @default(1)
+  activo           Boolean  @default(false)
+  modo             String   @default("aviso") @db.VarChar(16)
+  mensaje          String?  @db.Text
+  actualizadoPorId String?  @db.VarChar(36)
+  actualizadoPor   String?  @db.VarChar(191)
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  @@map("mantenimiento_app")
+}

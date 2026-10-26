@@ -1,27 +1,452 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-}
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Gradiente de marca Ancon: naranja -> rojo. Dos angulos usados en el sistema de diseno. */
+  .bg-brand-gradient {
+    background-image: linear-gradient(135deg, var(--primary) 0%, var(--primary-to) 100%);
+  }
+  .bg-brand-gradient-banner {
+    background-image: linear-gradient(120deg, var(--primary) 0%, var(--primary-to) 100%);
+  }
+  .text-brand-gradient {
+    background-image: linear-gradient(135deg, var(--primary) 0%, var(--primary-to) 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+  }
+  .shadow-brand {
+    box-shadow: 0 6px 16px -6px rgba(225, 37, 27, 0.55);
+  }
+  .shadow-brand-lg {
+    box-shadow: 0 10px 24px -8px rgba(225, 37, 27, 0.6);
+  }
+}
+
+@layer base {
+  :root {
+    --background: #eceef1;
+    --foreground: #14161b;
+    --card: #ffffff;
+    --card-foreground: #14161b;
+    --popover: #ffffff;
+    --popover-foreground: #14161b;
+
+    /* Marca Ancon: gradiente naranja -> rojo */
+    --primary: #f5891f;
+    --primary-to: #e1251b;
+    --primary-foreground: #ffffff;
+
+    --secondary: #f5f6f8;
+    --secondary-foreground: #14161b;
+    --muted: #f5f6f8;
+    --muted-foreground: #5a6270;
+    --accent: #fff3ec;
+    --accent-foreground: #c24a0a;
+    --destructive: #dc2626;
+    --destructive-foreground: #ffffff;
+    --border: #e9ebef;
+    --input: #dadde2;
+    --ring: #f5891f;
+
+    --chart-1: #f5891f;
+    --chart-2: #15a34a;
+    --chart-3: #d97706;
+    --chart-4: #dc2626;
+    --chart-5: #2563eb;
+
+    --radius: 0.625rem;
+
+    --sidebar: #ffffff;
+    --sidebar-foreground: #5a6270;
+    --sidebar-primary: #c24a0a;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #fff3ec;
+    --sidebar-accent-foreground: #c24a0a;
+    --sidebar-border: #f0f1f4;
+    --sidebar-ring: #f5891f;
+
+    /* Escala semantica de estado de lote — usada en badges, leyendas y tablas en todo el sistema. */
+    --status-disponible: #15a34a;
+    --status-disponible-fg: #15803d;
+    --status-disponible-bg: #e9f7ef;
+    --status-disponible-border: #cfeeda;
+
+    --status-reservado: #d97706;
+    --status-reservado-fg: #b45309;
+    --status-reservado-bg: #fdf3e3;
+    --status-reservado-border: #f6e3be;
+
+    --status-bloqueado: #dc2626;
+    --status-bloqueado-fg: #b91c1c;
+    --status-bloqueado-bg: #fdebea;
+    --status-bloqueado-border: #f7ccc9;
+
+    --status-hipotecado: #2563eb;
+    --status-hipotecado-fg: #1d4ed8;
+    --status-hipotecado-bg: #e9f0fe;
+    --status-hipotecado-border: #cfdffb;
+
+    /* Gráficos: errores vs. advertencias. Par validado (lightness band, CVD y
+       separación con visión normal) contra el fondo claro — el rojo/ámbar de status
+       quedaba por debajo del mínimo de separación para leerse en un mismo gráfico. */
+    --chart-error: #dc2626;
+    --chart-warn: #f59e0b;
+  }
+
+  .dark {
+    --background: #14161b;
+    --foreground: #f2f3f5;
+    --card: #1c1f26;
+    --card-foreground: #f2f3f5;
+    --popover: #1c1f26;
+    --popover-foreground: #f2f3f5;
+
+    --primary: #f5891f;
+    --primary-to: #e1251b;
+    --primary-foreground: #14161b;
+
+    --secondary: #23262e;
+    --secondary-foreground: #f2f3f5;
+    --muted: #23262e;
+    --muted-foreground: #9aa1ac;
+    --accent: #3a2416;
+    --accent-foreground: #f5b183;
+    --destructive: #dc2626;
+    --destructive-foreground: #f2f3f5;
+    --border: rgba(255, 255, 255, 0.1);
+    --input: rgba(255, 255, 255, 0.15);
+    --ring: #f5891f;
+
+    --chart-1: #f5891f;
+    --chart-2: #22c55e;
+    --chart-3: #f59e0b;
+    --chart-4: #ef4444;
+    --chart-5: #3b82f6;
+
+    --sidebar: #1c1f26;
+    --sidebar-foreground: #b7bcc4;
+    --sidebar-primary: #f5b183;
+    --sidebar-primary-foreground: #14161b;
+    --sidebar-accent: #3a2416;
+    --sidebar-accent-foreground: #f5b183;
+    --sidebar-border: rgba(255, 255, 255, 0.08);
+    --sidebar-ring: #f5891f;
+
+    --status-disponible: #22c55e;
+    --status-disponible-fg: #86efac;
+    --status-disponible-bg: rgba(21, 163, 74, 0.15);
+    --status-disponible-border: rgba(21, 163, 74, 0.3);
+
+    --status-reservado: #f59e0b;
+    --status-reservado-fg: #fcd34d;
+    --status-reservado-bg: rgba(217, 119, 6, 0.15);
+    --status-reservado-border: rgba(217, 119, 6, 0.3);
+
+    --status-bloqueado: #ef4444;
+    --status-bloqueado-fg: #fca5a5;
+    --status-bloqueado-bg: rgba(220, 38, 38, 0.15);
+    --status-bloqueado-border: rgba(220, 38, 38, 0.3);
+
+    --status-hipotecado: #3b82f6;
+    --status-hipotecado-fg: #93c5fd;
+    --status-hipotecado-bg: rgba(37, 99, 235, 0.15);
+    --status-hipotecado-border: rgba(37, 99, 235, 0.3);
+
+    /* Mismo par de gráficos, re-validado contra el fondo oscuro (no es una inversión
+       automática del de modo claro). */
+    --chart-error: #c62828;
+    --chart-warn: #b98d1c;
+  }
+
+  @theme inline {
+    --font-sans: var(--font-plus-jakarta-sans);
+    --font-mono: var(--font-jetbrains-mono);
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-to: var(--primary-to);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+
+    --color-status-disponible: var(--status-disponible);
+    --color-status-disponible-fg: var(--status-disponible-fg);
+    --color-status-disponible-bg: var(--status-disponible-bg);
+    --color-status-disponible-border: var(--status-disponible-border);
+
+    --color-status-reservado: var(--status-reservado);
+    --color-status-reservado-fg: var(--status-reservado-fg);
+    --color-status-reservado-bg: var(--status-reservado-bg);
+    --color-status-reservado-border: var(--status-reservado-border);
+
+    --color-status-bloqueado: var(--status-bloqueado);
+    --color-status-bloqueado-fg: var(--status-bloqueado-fg);
+    --color-status-bloqueado-bg: var(--status-bloqueado-bg);
+    --color-status-bloqueado-border: var(--status-bloqueado-border);
+
+    --color-status-hipotecado: var(--status-hipotecado);
+    --color-status-hipotecado-fg: var(--status-hipotecado-fg);
+    --color-status-hipotecado-bg: var(--status-hipotecado-bg);
+    --color-status-hipotecado-border: var(--status-hipotecado-border);
+
+    --color-chart-error: var(--chart-error);
+    --color-chart-warn: var(--chart-warn);
+
+    --radius-sm: calc(var(--radius) - 2px);
+    --radius-md: var(--radius);
+    --radius-lg: calc(var(--radius) + 4px);
+    --radius-xl: calc(var(--radius) + 6px);
+
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
+    --shadow-md: 0 4px 14px -4px rgba(16, 24, 40, 0.12);
+    --shadow-lg: 0 16px 40px -12px rgba(16, 24, 40, 0.22);
+    --shadow-xl: 0 24px 60px -20px rgba(16, 24, 40, 0.28);
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* AppShell (components/shared/app-shell.tsx) usa "h-screen overflow-hidden" +
+   "overflow-y-auto" en el <main> para el scroll normal del dashboard — eso mismo
+   recorta cualquier página a lo que entra en una sola pantalla al imprimir (el motor
+   de impresión no pagina contenido dentro de un contenedor con scroll, simplemente
+   corta lo que queda fuera del alto fijo). Sin este reset, páginas de impresión como
+   /ventas/oferta/reporte/[id]/imprimir se cortan a la mitad y nunca llegan a mostrar
+   el final del documento (firmas incluidas). El sidebar tampoco tiene sentido en una
+   hoja impresa, así que se oculta aparte. */
+/* Arrastre de ancho de columna en las tablas del editor de convenios
+   (components/convenios/tiptap-editor.tsx, @tiptap/extension-table con
+   resizable:true). El plugin de ProseMirror-tables ya calcula el arrastre solo, pero
+   sin esta hoja de estilo el handle no tiene ancho/color (invisible) y el cursor no
+   cambia — la funcionalidad estaba activa pero nadie podía verla ni agarrarla con el
+   mouse. Selectores y valores son los que recomienda la documentación oficial de Tiptap. */
+/* Fuente por defecto del editor de convenios: Times New Roman, para que un párrafo
+   nuevo (sin una fuente elegida a mano desde el desplegable de fuentes) ya coincida con
+   el documento final generado (ver FUENTE_DOCUMENTO en convenio-reporte-content.tsx).
+   Un mark explícito de FontFamily en un fragmento de texto (font-family inline) sigue
+   ganando sobre esto, como corresponde en cascada CSS normal. */
+.tiptap-convenio {
+  font-family: "Times New Roman", Times, serif;
+}
+/* El botón "abc" de la barra (tiptap-editor.tsx) pone type="a" en el <ol> — los
+   navegadores lo respetan de fábrica, PERO la utilidad de Tailwind `list-decimal` de
+   más abajo fuerza `list-style-type: decimal` por CSS en TODOS los <ol>, y CSS le gana
+   al atributo HTML type (por eso el botón se marcaba activo pero seguía mostrando
+   1,2,3). Esta regla tiene más especificidad (clase + atributo) que esa utilidad
+   (clase + elemento), así que gana ella. Misma regla se repite para .convenio-preview
+   (la vista del convenio real, ver convenio-reporte-content.tsx) por el mismo motivo. */
+.tiptap-convenio ol[type="a"],
+.convenio-preview ol[type="a"] {
+  list-style-type: lower-alpha;
+}
+.tiptap-convenio .tableWrapper {
+  overflow-x: auto;
+}
+/* Tablas del convenio (editor + vista del convenio real): bordes negros finos y filas
+   que se ajustan al texto — el alto lo da el contenido, no el margen de los párrafos
+   (que dentro de una celda se anula para que no queden filas "infladas"). */
+.tiptap-convenio table,
+.convenio-preview table {
+  border-collapse: collapse;
+  margin: 0 0 12px;
+}
+.convenio-preview table {
+  table-layout: fixed;
+  width: 100%;
+}
+.tiptap-convenio td,
+.tiptap-convenio th,
+.convenio-preview td,
+.convenio-preview th {
+  border: 1px solid #000;
+  min-width: 3em;
+  padding: 2px 8px;
+  vertical-align: top;
+}
+.tiptap-convenio th,
+.convenio-preview th {
+  background: color-mix(in srgb, var(--muted) 70%, transparent);
+  font-weight: 700;
+  text-align: left;
+}
+.tiptap-convenio td p,
+.tiptap-convenio th p,
+.convenio-preview td p,
+.convenio-preview th p {
+  line-height: 1.4;
+  margin: 0 !important;
+}
+.tiptap-convenio td,
+.tiptap-convenio th {
+  position: relative;
+}
+.tiptap-convenio .selectedCell:after {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+.tiptap-convenio .column-resize-handle {
+  background-color: var(--primary);
+  bottom: -2px;
+  pointer-events: none;
+  position: absolute;
+  right: -2px;
+  top: 0;
+  width: 4px;
+}
+.tiptap-convenio.resize-cursor {
+  cursor: col-resize;
+}
+
+@media print {
+  [data-app-shell-root],
+  [data-app-shell-main] {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  [data-app-shell-root] {
+    position: static !important;
+    inset: auto !important;
+  }
+  [data-app-sidebar] {
+    display: none !important;
+  }
+}
+
+/* Tablas que en mobile se muestran como tarjetas apiladas: cada <td> lleva su
+   `data-label` (el encabezado de su columna) y el <thead> se oculta. */
+@media (max-width: 767px) {
+  table.tabla-apilada,
+  table.tabla-apilada tbody {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+  }
+  table.tabla-apilada thead {
+    display: none;
+  }
+  table.tabla-apilada tr {
+    display: block;
+    padding: 0.5rem 1rem;
+  }
+  table.tabla-apilada td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.375rem 0 !important;
+    text-align: right;
+    max-width: none !important;
+    overflow: visible !important;
+    white-space: normal !important;
+    text-overflow: clip !important;
+  }
+  table.tabla-apilada td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  table.tabla-apilada td[data-label=""]::before {
+    content: none;
+  }
+}
+
+/* iOS Safari hace zoom automático al enfocar un campo con letra de menos de 16px (y no
+   vuelve a alejar al salir). En pantallas táctiles se fuerza 16px en los campos de
+   texto para que no pase; en escritorio quedan con su tamaño de diseño. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea,
+  [contenteditable="true"] {
+    font-size: 16px !important;
+  }
+}
+
+/* iOS Safari le da a los campos de fecha/hora nativos un ancho mínimo propio que ignora
+   el w-full, y en el teléfono se salen de la pantalla. Sin la apariencia nativa
+   respetan el ancho del contenedor; el valor se alinea a la izquierda como el resto
+   de los campos (iOS lo centra por defecto). */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+}
+input::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+/* Llave de la pantalla de mantenimiento (components/shared/mantenimiento-pantalla.tsx):
+   gira un poco y descansa, como si estuviera ajustando una tuerca. */
+@keyframes wiggle {
+  0%,
+  60%,
+  100% {
+    transform: rotate(0deg);
+  }
+  15% {
+    transform: rotate(-18deg);
+  }
+  30% {
+    transform: rotate(14deg);
+  }
+  45% {
+    transform: rotate(-8deg);
   }
 }

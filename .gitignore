@@ -26,7 +26,10 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
+.env
 .env*.local
+.env.example
+.impeccable
 
 # vercel
 .vercel
@@ -34,3 +37,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# editor / agent local state
+.claude/
+
+# graphify
+graphify-out/
+
+
+certificates
