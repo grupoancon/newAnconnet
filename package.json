@@ -23,6 +23,7 @@
     "@hookform/resolvers": "^5.4.0",
     "@prisma/client": "^6.19.3",
     "@tailwindcss/postcss": "^4.3.2",
+    "@tiptap/core": "^2.27.3",
     "@tiptap/extension-color": "^2.27.3",
     "@tiptap/extension-font-family": "^2.27.3",
     "@tiptap/extension-link": "^2.27.3",
