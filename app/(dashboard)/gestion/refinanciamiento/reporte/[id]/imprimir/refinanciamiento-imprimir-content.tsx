@@ -18,11 +18,9 @@ import {
 import {
   VentasApiError,
   listarClientesExtra,
-  listarRepresentantesEmpresa,
   obtenerRefinanciamientoPorId,
   obtenerOferta,
   obtenerProceso,
-  type AsesorVentas,
   type ClienteExtraBackend,
   type CuotaAmortizacion,
   type EntradaPago,
@@ -30,6 +28,10 @@ import {
   type OfertaBackend,
   type ProcesoBackend,
 } from "@/lib/api/ventas-api"
+import {
+  listarRepresentantesActivos,
+  type RepresentanteConvenio,
+} from "@/lib/api/convenios-api"
 
 // Mismo patrón que oferta-imprimir-content.tsx: un firmante extra de cliente (cónyuge,
 // apoderado, referido, cliente adicional, o nombre libre) — no de la empresa, esa va
@@ -81,14 +83,15 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
   const [clientesExtra, setClientesExtra] = useState<ClienteExtraBackend[]>([])
 
   // Firmas — mismo patrón que oferta-imprimir-content.tsx: el cliente es fijo (viene
-  // del proceso), el representante de la empresa se elige de una lista (usuarios con
-  // permiso "ofertas:revisar", ver listarRepresentantesEmpresa); se pueden agregar más
+  // del proceso), el representante de la empresa se elige de una lista (la misma que el
+  // convenio: Configuración > Convenios > Representantes, ver
+  // listarRepresentantesActivos); se pueden agregar más
   // firmantes de CLIENTE desde los candidatos ya registrados (cónyuge, apoderado,
   // referido, clientes extra — todos vienen de la oferta del mismo proceso) o con
   // nombre libre. Todo esto es solo para esta impresión, no se guarda, y solo aplica
   // una vez aprobado (un borrador no se firma).
   const [representantesDisponibles, setRepresentantesDisponibles] = useState<
-    AsesorVentas[]
+    RepresentanteConvenio[]
   >([])
   const [representanteEmpresa, setRepresentanteEmpresa] = useState("")
   const [firmantesExtra, setFirmantesExtra] = useState<Firmante[]>([])
@@ -127,13 +130,15 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
             : Promise.resolve(null),
           obtenerOferta(refinanciamientoData.id_process),
           listarClientesExtra(refinanciamientoData.id_process),
-          listarRepresentantesEmpresa(),
+          listarRepresentantesActivos(),
         ])
         if (cancelado) return
         setLoteInfo(lote)
         setOferta(ofertaData)
         setClientesExtra(extra)
         setRepresentantesDisponibles(representantes)
+        // Igual que el convenio: arranca con el primer representante activo.
+        setRepresentanteEmpresa((actual) => actual || representantes[0]?.nombre || "")
       } catch (err) {
         if (cancelado) return
         setError(
@@ -682,7 +687,10 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
             {aprobado && (
               <div className="mt-16 flex flex-wrap justify-between gap-6">
                 <Firma nombre={titular?.nombre ?? "—"} rol="C.C N°" />
-                <Firma nombre={representanteEmpresa || "—"} rol="INMOCONSTRUCCIONES" />
+                <Firma
+                  nombre={representanteEmpresa || "—"}
+                  rol="INMOCONSTRUCCIONES CIA. LTDA."
+                />
                 {firmantesExtra
                   .filter((firmante) => firmante.nombre)
                   .map((firmante) => (

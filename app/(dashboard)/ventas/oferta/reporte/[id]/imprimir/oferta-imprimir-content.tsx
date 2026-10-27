@@ -21,13 +21,11 @@ import {
   actualizarOferta,
   crearTipoInmueble,
   listarClientesExtra,
-  listarRepresentantesEmpresa,
   listarTiposInmueble,
   obtenerDatosFinancieros,
   obtenerFinanciamiento,
   obtenerOferta,
   obtenerProceso,
-  type AsesorVentas,
   type ClienteExtraBackend,
   type DatosFinancierosBackend,
   type FinanciamientoBackend,
@@ -35,6 +33,10 @@ import {
   type ProcesoBackend,
   type TipoInmuebleBackend,
 } from "@/lib/api/ventas-api"
+import {
+  listarRepresentantesActivos,
+  type RepresentanteConvenio,
+} from "@/lib/api/convenios-api"
 import { separarTelefono } from "@/lib/const/codigos-telefonicos"
 
 function formatearPrecio(valor: string | number | null | undefined): string {
@@ -122,13 +124,14 @@ export function OfertaImprimirContent({ id }: { id: string }) {
   const [conMembrete, setConMembrete] = useState(true)
 
   // Firmas — el cliente y el asesor son fijos (vienen del proceso/oferta); el
-  // representante de la empresa se elige de una lista (usuarios con permiso
-  // "ofertas:revisar", ver listarRepresentantesEmpresa) en vez de escribirse a mano;
+  // representante de la empresa se elige de una lista (la misma que el
+  // convenio: Configuración > Convenios > Representantes, ver
+  // listarRepresentantesActivos) en vez de escribirse a mano;
   // se pueden agregar más firmantes desde los candidatos ya registrados (cónyuge,
   // apoderado, referido, clientes extra) o con nombre libre. Todo esto es solo para
   // esta impresión, no se guarda.
   const [representantesDisponibles, setRepresentantesDisponibles] = useState<
-    AsesorVentas[]
+    RepresentanteConvenio[]
   >([])
   const [representanteEmpresa, setRepresentanteEmpresa] = useState("")
   const [firmantesExtra, setFirmantesExtra] = useState<Firmante[]>([])
@@ -169,7 +172,7 @@ export function OfertaImprimirContent({ id }: { id: string }) {
           obtenerDatosFinancieros(idNumero),
           obtenerFinanciamiento(idNumero),
           listarClientesExtra(idNumero),
-          listarRepresentantesEmpresa(),
+          listarRepresentantesActivos(),
           listarTiposInmueble(),
         ])
         if (cancelado) return
@@ -179,6 +182,8 @@ export function OfertaImprimirContent({ id }: { id: string }) {
         setFinanciamiento(financiamientoData)
         setClientesExtra(extra)
         setRepresentantesDisponibles(representantes)
+        // Igual que el convenio: arranca con el primer representante activo.
+        setRepresentanteEmpresa((actual) => actual || representantes[0]?.nombre || "")
         setTiposInmuebleCatalogo(tiposInmueble)
         // Default "TERRENO" cuando la oferta todavía no tiene un tipo elegido.
         setTipoInmueble(ofertaData?.cli_tipoInmueble || "TERRENO")
@@ -805,7 +810,10 @@ export function OfertaImprimirContent({ id }: { id: string }) {
               <div className="mt-16 flex flex-wrap justify-between gap-6">
                 <Firma nombre={titular?.nombre ?? "—"} rol="C.C N°" />
                 <Firma nombre={proceso?.cli_asesor ?? "—"} rol="" />
-                <Firma nombre={representanteEmpresa || "—"} rol="INMOCONSTRUCCIONES" />
+                <Firma
+                  nombre={representanteEmpresa || "—"}
+                  rol="INMOCONSTRUCCIONES CIA. LTDA."
+                />
                 {firmantesExtra
                   .filter((firmante) => firmante.nombre)
                   .map((firmante) => (
