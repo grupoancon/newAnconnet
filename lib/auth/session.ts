@@ -9,7 +9,11 @@ import type { AuthenticatedUser } from "@/types/auth"
 
 // Ver tambien middleware.ts, que hace el mismo checkeo de presencia del cookie de
 // Better Auth en el edge. Aqui si se valida de verdad, contra el backend.
-const BETTER_AUTH_BASE_URL = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001"}/api/auth`
+// Esto corre en el servidor de Next, no en el navegador: con la API detrás de Nginx
+// (NEXT_PUBLIC_API_URL="/backend", relativa) un fetch desde Node no sabe a qué host
+// ir y fallaba siempre — cada página mostraba "El servidor no está disponible". Por eso
+// usa API_INTERNAL_URL (ej. http://127.0.0.1:4001, directo sin pasar por Nginx).
+const BETTER_AUTH_BASE_URL = `${process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001"}/api/auth`
 
 // Tiempo maximo para que el backend conteste /get-session. Sin esto, con la API colgada
 // (no caida, sino sin responder) cada navegacion se quedaba esperando indefinidamente.

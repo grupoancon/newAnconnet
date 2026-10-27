@@ -8,7 +8,13 @@ import { useSession } from "@/components/shared/session-provider"
 
 // Namespace "aplication" del gateway de anconAPI (`apps/aplication/websocket`). Misma
 // NEXT_PUBLIC_API_URL que lib/api/*: cambiar de servidor sigue siendo una línea en .env.
-const SOCKET_URL = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001"}/aplication`
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001"
+// Con la API detrás de Nginx en un prefijo (NEXT_PUBLIC_API_URL="/backend"), socket.io
+// tomaría "/backend" como parte del namespace y haría el handshake en /socket.io de la
+// raíz, que es Next. El prefijo va en `path`; el namespace queda "/aplication".
+const API_EN_PREFIJO = API_BASE.startsWith("/")
+const SOCKET_URL = API_EN_PREFIJO ? "/aplication" : `${API_BASE}/aplication`
+const SOCKET_PATH = API_EN_PREFIJO ? `${API_BASE}/socket.io` : "/socket.io"
 
 // El backend agrupa a los admins/intranet por empresa en la sala `empresa_<id>`. (La
 // triple "c" es el id real que usa el backend por defecto — no es un typo de acá.)
@@ -57,6 +63,7 @@ export function PresenciaProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const nuevoSocket = io(SOCKET_URL, {
+      path: SOCKET_PATH,
       transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: Infinity,
