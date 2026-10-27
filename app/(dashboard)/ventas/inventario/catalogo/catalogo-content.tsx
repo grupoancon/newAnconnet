@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { CloudOff } from "lucide-react"
+import { CloudCheck, CloudDownload, CloudOff } from "lucide-react"
 
 import { DashboardTopbar } from "@/components/shared/dashboard-topbar"
 import { EmptyState } from "@/components/shared/empty-state"
@@ -9,6 +9,7 @@ import { FilterBar, FilterSearchInput } from "@/components/shared/filter-bar"
 import { PageHeader } from "@/components/shared/page-header"
 import { PillTabs } from "@/components/shared/pill-tabs"
 import { Spinner } from "@/components/shared/spinner"
+import { useToast } from "@/components/shared/toast-provider"
 import {
   Select,
   SelectContent,
@@ -23,7 +24,11 @@ import {
   type LoteInventario,
   type ProyectoInventario,
 } from "@/lib/api/inventario-api"
-import { listarPlanosCacheados, respaldarPlanos } from "@/lib/plano-cache"
+import {
+  listarPlanosCacheados,
+  respaldarPlanos,
+  type ProgresoRespaldo,
+} from "@/lib/plano-cache"
 import { CatalogoDetalladaView } from "./catalogo-detallada-view"
 import { CatalogoLoteDetalleSheet } from "./catalogo-lote-detalle-sheet"
 import { CatalogoPlanosView } from "./catalogo-planos-view"
@@ -63,6 +68,8 @@ export function InventarioCatalogoContent() {
   // ESTE navegador ya vio antes con conexión (en Planos o en el editor de mapeo); no es
   // un caché compartido entre dispositivos.
   const [modoOffline, setModoOffline] = useState(false)
+  const [respaldo, setRespaldo] = useState<ProgresoRespaldo | null>(null)
+  const toast = useToast()
   const objectUrlsRef = useRef<string[]>([])
 
   useEffect(() => {
@@ -73,8 +80,18 @@ export function InventarioCatalogoContent() {
       .then(([lotesRes, proyectosRes]) => {
         setLotes(lotesRes)
         setProyectos(proyectosRes)
-        // Sin await: el respaldo offline no debe demorar la pantalla.
-        void respaldarPlanos(proyectosRes, lotesRes)
+        // Sin await: el respaldo offline no debe demorar la pantalla. El progreso se
+        // muestra en un aviso para que el asesor sepa cuándo ya puede quedarse sin señal.
+        void respaldarPlanos(proyectosRes, lotesRes, setRespaldo).then((final) => {
+          // Toast solo si se bajó algo nuevo — si ya estaba todo guardado, el aviso fijo
+          // alcanza y no se molesta en cada visita.
+          if (final.descargados > 0 && final.fallidos === 0) {
+            toast({
+              variant: "success",
+              description: "Planos listos para usar sin conexión.",
+            })
+          }
+        })
       })
       .catch(async (err) => {
         const cacheados = await listarPlanosCacheados()
@@ -106,7 +123,7 @@ export function InventarioCatalogoContent() {
         }
       })
       .finally(() => setCargando(false))
-  }, [])
+  }, [toast])
 
   // Los object URL de las imágenes cacheadas solo sirven mientras dure esta pestaña —
   // hay que liberarlos al salir de la pantalla para no dejar memoria reservada de más.
@@ -220,6 +237,8 @@ export function InventarioCatalogoContent() {
             que ya se vieron antes con señal). Puede faltar algún proyecto o estar
             desactualizado.
           </div>
+        ) : respaldo && respaldo.total > 0 ? (
+          <AvisoRespaldo respaldo={respaldo} />
         ) : null}
 
         {cargando ? (
@@ -253,6 +272,40 @@ export function InventarioCatalogoContent() {
         lote={loteSeleccionado}
         onOpenChange={(open) => !open && setLoteSeleccionado(null)}
       />
+    </div>
+  )
+}
+
+// Aviso del respaldo offline de los planos (ver respaldarPlanos): mientras se guardan
+// muestra el avance, y al terminar confirma cuántos quedaron disponibles sin conexión.
+function AvisoRespaldo({ respaldo }: { respaldo: ProgresoRespaldo }) {
+  const { total, hechos, fallidos } = respaldo
+  const listos = hechos - fallidos
+
+  if (hechos < total) {
+    return (
+      <div className="bg-muted text-muted-foreground mb-4 flex items-center gap-2 rounded-md px-3 py-2 text-[12.5px] font-semibold">
+        <CloudDownload className="size-4 shrink-0 animate-pulse" strokeWidth={1.8} />
+        Guardando planos para usar sin conexión… {hechos} de {total}
+      </div>
+    )
+  }
+
+  if (fallidos > 0) {
+    return (
+      <div className="bg-status-reservado-bg text-status-reservado-fg mb-4 flex items-center gap-2 rounded-md px-3 py-2 text-[12.5px] font-semibold">
+        <CloudOff className="size-4 shrink-0" strokeWidth={1.8} />
+        {listos} de {total} planos disponibles sin conexión — {fallidos} no se pudieron
+        guardar. Vuelve a abrir el inventario con buena señal para reintentar.
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-status-disponible-bg text-status-disponible-fg mb-4 flex items-center gap-2 rounded-md px-3 py-2 text-[12.5px] font-semibold">
+      <CloudCheck className="size-4 shrink-0" strokeWidth={1.8} />
+      {total === 1 ? "El plano está listo" : `Los ${total} planos están listos`} para usar
+      sin conexión.
     </div>
   )
 }

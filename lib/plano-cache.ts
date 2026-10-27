@@ -42,16 +42,23 @@ export async function guardarPlanoEnCache(
   datos: Omit<PlanoCacheado, "guardadoEn">
 ): Promise<void> {
   try {
-    const db = await abrirDb()
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readwrite")
-      tx.objectStore(STORE_NAME).put({ ...datos, guardadoEn: Date.now() })
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
+    await escribirPlano(datos)
   } catch {
     // ver comentario de la función
   }
+}
+
+// Igual que guardarPlanoEnCache pero propagando el error — respaldarPlanos lo necesita
+// para contar cuáles fallaron.
+async function escribirPlano(datos: Omit<PlanoCacheado, "guardadoEn">): Promise<void> {
+  const db = await abrirDb()
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite")
+    tx.objectStore(STORE_NAME).put({ ...datos, guardadoEn: Date.now() })
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+    tx.onabort = () => reject(tx.error)
+  })
 }
 
 export async function leerPlanoDeCache(idProyecto: number): Promise<PlanoCacheado | null> {
@@ -73,22 +80,42 @@ export async function leerPlanoDeCache(idProyecto: number): Promise<PlanoCachead
 // Planos, así que sin señal "Ver planos guardados" solía no encontrar nada. La imagen
 // solo se vuelve a bajar si cambió plano_url (o no estaba); los lotes se refrescan
 // siempre para que los estados guardados sean los más recientes.
+export type ProgresoRespaldo = {
+  total: number
+  // Procesados (guardados o fallidos) — llega a `total` al terminar.
+  hechos: number
+  fallidos: number
+  // Imágenes bajadas de la red en esta pasada (0 = ya estaba todo guardado).
+  descargados: number
+}
+
 export async function respaldarPlanos(
   proyectos: ProyectoInventario[],
-  lotes: LoteInventario[]
-): Promise<void> {
-  for (const proyecto of proyectos) {
-    if (!proyecto.plano_url) continue
+  lotes: LoteInventario[],
+  onProgreso?: (progreso: ProgresoRespaldo) => void
+): Promise<ProgresoRespaldo> {
+  const conPlano = proyectos.filter((p) => p.plano_url)
+  const progreso: ProgresoRespaldo = {
+    total: conPlano.length,
+    hechos: 0,
+    fallidos: 0,
+    descargados: 0,
+  }
+  onProgreso?.({ ...progreso })
+  for (const proyecto of conPlano) {
+    const planoUrl = proyecto.plano_url as string
     try {
       const previo = await leerPlanoDeCache(proyecto.id)
-      const imagen =
-        previo && previo.proyecto.plano_url === proyecto.plano_url
-          ? previo.imagen
-          : await fetch(proyecto.plano_url).then((respuesta) => {
-              if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`)
-              return respuesta.blob()
-            })
-      await guardarPlanoEnCache({
+      let imagen: Blob
+      if (previo && previo.proyecto.plano_url === planoUrl) {
+        imagen = previo.imagen
+      } else {
+        const respuesta = await fetch(planoUrl)
+        if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`)
+        imagen = await respuesta.blob()
+        progreso.descargados++
+      }
+      await escribirPlano({
         idProyecto: proyecto.id,
         proyecto,
         lotes: lotes.filter(
@@ -97,9 +124,14 @@ export async function respaldarPlanos(
         imagen,
       })
     } catch {
-      // Un plano que no se pudo bajar no frena el resto — ver guardarPlanoEnCache.
+      // Un plano que no se pudo bajar o guardar no frena el resto; se cuenta como fallido
+      // para no avisar "listo" sobre algo que no quedó disponible sin conexión.
+      progreso.fallidos++
     }
+    progreso.hechos++
+    onProgreso?.({ ...progreso })
   }
+  return progreso
 }
 
 // Todos los planos guardados en este navegador — a diferencia de leerPlanoDeCache (un
