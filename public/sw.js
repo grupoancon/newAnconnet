@@ -10,7 +10,7 @@
  * se usa si no hay conexión, y los datos de los planos salen del IndexedDB que llena la
  * propia pantalla (lib/plano-cache.ts). Al cerrar sesión se borra este cache
  * (ver cerrarSesion en sidebar-nav.tsx). */
-const VERSION = "v2"
+const VERSION = "v3"
 const STATIC_CACHE = `anconnet-static-${VERSION}`
 const PAGINAS_CACHE = "anconnet-paginas-offline"
 const OFFLINE_URL = "/offline.html"
@@ -20,7 +20,9 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(STATIC_CACHE)
-      .then((cache) => cache.addAll([OFFLINE_URL, "/icons/icon-192.png"]))
+      .then((cache) =>
+        cache.addAll([OFFLINE_URL, "/icons/icon-192.png", "/icons/logo-offline.png"])
+      )
       .then(() => self.skipWaiting())
   )
 })
