@@ -23,7 +23,7 @@ import {
   type LoteInventario,
   type ProyectoInventario,
 } from "@/lib/api/inventario-api"
-import { listarPlanosCacheados } from "@/lib/plano-cache"
+import { listarPlanosCacheados, respaldarPlanos } from "@/lib/plano-cache"
 import { CatalogoDetalladaView } from "./catalogo-detallada-view"
 import { CatalogoLoteDetalleSheet } from "./catalogo-lote-detalle-sheet"
 import { CatalogoPlanosView } from "./catalogo-planos-view"
@@ -73,6 +73,8 @@ export function InventarioCatalogoContent() {
       .then(([lotesRes, proyectosRes]) => {
         setLotes(lotesRes)
         setProyectos(proyectosRes)
+        // Sin await: el respaldo offline no debe demorar la pantalla.
+        void respaldarPlanos(proyectosRes, lotesRes)
       })
       .catch(async (err) => {
         const cacheados = await listarPlanosCacheados()
@@ -89,6 +91,12 @@ export function InventarioCatalogoContent() {
           setModoOffline(true)
           // Sin conexión lo que hay guardado son los planos — se abre directo ahí.
           setVistaPrincipal("planos")
+        } else if (!navigator.onLine) {
+          // Sin red y sin nada en IndexedDB: decir por qué, no un error genérico. En
+          // iPhone el almacenamiento de Safari y el de la app instalada son distintos.
+          setError(
+            "No hay planos guardados en este dispositivo. Abre el inventario una vez con conexión desde esta misma app para tenerlos disponibles sin señal."
+          )
         } else {
           setError(
             err instanceof InventarioApiError

@@ -68,6 +68,40 @@ export async function leerPlanoDeCache(idProyecto: number): Promise<PlanoCachead
   }
 }
 
+// Respaldo de TODOS los proyectos con plano, en segundo plano, cada vez que el catálogo
+// carga con conexión — antes solo se cacheaba el proyecto que alguien abría en la vista
+// Planos, así que sin señal "Ver planos guardados" solía no encontrar nada. La imagen
+// solo se vuelve a bajar si cambió plano_url (o no estaba); los lotes se refrescan
+// siempre para que los estados guardados sean los más recientes.
+export async function respaldarPlanos(
+  proyectos: ProyectoInventario[],
+  lotes: LoteInventario[]
+): Promise<void> {
+  for (const proyecto of proyectos) {
+    if (!proyecto.plano_url) continue
+    try {
+      const previo = await leerPlanoDeCache(proyecto.id)
+      const imagen =
+        previo && previo.proyecto.plano_url === proyecto.plano_url
+          ? previo.imagen
+          : await fetch(proyecto.plano_url).then((respuesta) => {
+              if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`)
+              return respuesta.blob()
+            })
+      await guardarPlanoEnCache({
+        idProyecto: proyecto.id,
+        proyecto,
+        lotes: lotes.filter(
+          (l) => l.id_proyecto === proyecto.id && l.plano_x != null && l.plano_y != null
+        ),
+        imagen,
+      })
+    } catch {
+      // Un plano que no se pudo bajar no frena el resto — ver guardarPlanoEnCache.
+    }
+  }
+}
+
 // Todos los planos guardados en este navegador — a diferencia de leerPlanoDeCache (un
 // proyecto puntual, para el editor que ya sabe cuál), esto es para el catálogo
 // (InventarioCatalogoContent): si falla la carga inicial no tiene forma de saber de
