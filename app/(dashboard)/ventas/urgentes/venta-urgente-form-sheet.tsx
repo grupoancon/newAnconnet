@@ -72,7 +72,7 @@ export function VentaUrgenteFormSheet({
     [lotes, proyectoNombre]
   )
 
-  const puedeGuardar = lote.trim().length > 0
+  const puedeGuardar = lote.trim().length > 0 && mensaje.trim().length > 0
 
   function guardar() {
     startSaving(async () => {
@@ -86,7 +86,7 @@ export function VentaUrgenteFormSheet({
         } else {
           await crearVentaUrgente({
             lote: lote.trim(),
-            mensaje: mensaje.trim() || undefined,
+            mensaje: mensaje.trim(),
           })
           toast({
             variant: "success",
@@ -160,7 +160,7 @@ export function VentaUrgenteFormSheet({
 
           <div>
             <label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
-              Motivo / mensaje (opcional)
+              Motivo / mensaje *
             </label>
             <textarea
               value={mensaje}

@@ -225,6 +225,9 @@ export function ConvenioReporteContent({ id }: { id: string }) {
         if (cancelado) return
         setProceso(procesoData)
         setOferta(ofertaData)
+        // Con apoderado cargado, firma él en lugar del comprador: el titular arranca
+        // desmarcado (sigue la casilla por si igual tiene que firmar).
+        setTitularIncluido(!ofertaData?.cli_representante?.trim())
         setClientesExtra(extras)
         setClientesExtraIncluidos(Object.fromEntries(extras.map((c) => [c.id, true])))
         setRepresentantes(reps)

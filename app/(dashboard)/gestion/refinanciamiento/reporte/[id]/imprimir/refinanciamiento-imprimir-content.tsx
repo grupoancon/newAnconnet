@@ -158,6 +158,9 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
   }, [idNumero])
 
   const titular = proceso?.titular ?? null
+  // Con apoderado cargado en la oferta, firma él en lugar del cliente principal (mismo
+  // criterio que el convenio); el titular queda como candidato para agregarlo aparte.
+  const apoderado = oferta?.cli_representante?.trim() || null
   const valorLote = loteInfo?.pvp ?? proceso?.lote_price ?? null
   const valorLoteNumero =
     typeof valorLote === "string" ? parseFloat(valorLote) : (valorLote ?? 0)
@@ -267,11 +270,13 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
         rolSugerido: "Cónyuge",
       })
     }
-    if (oferta.cli_representante) {
+    // Con apoderado, él ya firma como cliente (ver `apoderado`): el que queda para
+    // agregar aparte, si también tiene que firmar, es el titular.
+    if (apoderado && titular?.nombre) {
       lista.push({
-        tipo: "apoderado",
-        nombre: oferta.cli_representante,
-        rolSugerido: "Apoderado",
+        tipo: "titular",
+        nombre: titular.nombre,
+        rolSugerido: "C.C N°",
       })
     }
     if (oferta.referido_nombre) {
@@ -291,7 +296,7 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
       }
     })
     return lista.filter((c) => !firmantesExtra.some((f) => f.id === c.tipo))
-  }, [oferta, clientesExtra, firmantesExtra])
+  }, [oferta, clientesExtra, firmantesExtra, apoderado, titular])
 
   function agregarFirmante(candidato: {
     tipo: string
@@ -686,7 +691,10 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
 
             {aprobado && (
               <div className="mt-16 flex flex-wrap justify-between gap-6">
-                <Firma nombre={titular?.nombre ?? "—"} rol="C.C N°" />
+                <Firma
+                  nombre={apoderado ?? titular?.nombre ?? "—"}
+                  rol={apoderado ? "APODERADO · C.C N°" : "C.C N°"}
+                />
                 <Firma
                   nombre={representanteEmpresa || "—"}
                   rol="INMOCONSTRUCCIONES CIA. LTDA."

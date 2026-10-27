@@ -708,6 +708,9 @@ export function OfertaCompraContent({ id }: { id: string }) {
 
   const titular = proceso?.titular ?? null
   const requiereConyuge = titular?.estado_civil === ESTADO_CIVIL_CASADO
+  // El apoderado es opcional, pero si se carga el nombre la identificación pasa a ser
+  // obligatoria — el apoderado firma convenio/financiamiento con su cédula.
+  const hayApoderado = Boolean(form.cli_representante.trim())
 
   // Cap. ahorro mensual no se pide: se calcula solo (ingresos mensuales + otros ingresos
   // - gastos mensuales), el campo queda deshabilitado en el paso Datos financieros.
@@ -936,7 +939,12 @@ export function OfertaCompraContent({ id }: { id: string }) {
         subtitulo: "Opcional — deje en blanco si el cliente no tiene apoderado",
         campos: [
           { tipo: "texto", label: "Apellidos y nombres", campo: "cli_representante" },
-          { tipo: "texto", label: "Identificación", campo: "cli_representanteID" },
+          {
+            tipo: "texto",
+            label: "Identificación",
+            campo: "cli_representanteID",
+            requerido: hayApoderado,
+          },
           { tipo: "texto", label: "Teléfono", campo: "cli_telefR" },
           { tipo: "texto", label: "Correo electrónico", campo: "cli_representanteMail" },
         ],
@@ -1071,7 +1079,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
     )
 
     return lista
-  }, [proceso, loteInfo, titular, requiereConyuge])
+  }, [proceso, loteInfo, titular, requiereConyuge, hayApoderado])
 
   // Un borrador recuperado puede traer un paso que ya no existe (ej. el paso del
   // cónyuge depende de los datos) — se lleva al último disponible.
@@ -1159,8 +1167,8 @@ export function OfertaCompraContent({ id }: { id: string }) {
   }
 
   // Un paso está completo cuando todos sus campos marcados "requerido" tienen valor —
-  // Apoderado/Referidos no marcan ninguno, así que siempre quedan completos (opcionales
-  // de verdad). País/Ciudad/Provincia-Estado/Sector del paso Cliente, Parentesco del
+  // Referidos no marca ninguno, así que siempre queda completo; Apoderado solo exige la
+  // identificación cuando se cargó el nombre (ver hayApoderado). País/Ciudad/Provincia-Estado/Sector del paso Cliente, Parentesco del
   // paso Referencias y Actividad/campos condicionales del paso Trabajo se renderizan
   // aparte (no viven en el array `campos`), así que su obligatoriedad se valida acá
   // directamente en vez de con la bandera `requerido`.
@@ -1503,7 +1511,10 @@ export function OfertaCompraContent({ id }: { id: string }) {
                 Formulario de oferta de compra
               </h1>
               <p className="text-sm text-white/90">Complete la información requerida</p>
-              <IndicadorAutoguardado estado={borrador.estado} className="mt-1 text-white/85" />
+              <IndicadorAutoguardado
+                estado={borrador.estado}
+                className="mt-1 text-white/85"
+              />
             </div>
           </div>
 
@@ -1536,8 +1547,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
                     className="border-primary/30 bg-primary/5 mb-5.5 flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="text-sm">
-                      <span className="font-semibold">Recuperamos tu borrador</span>{" "}
-                      del{" "}
+                      <span className="font-semibold">Recuperamos tu borrador</span> del{" "}
                       {new Date(borrador.recuperadoEn).toLocaleString("es-EC", {
                         day: "2-digit",
                         month: "2-digit",
@@ -1645,11 +1655,15 @@ export function OfertaCompraContent({ id }: { id: string }) {
                         value={form[campo.campo]}
                         onChange={(valor) => actualizarCampo(campo.campo, valor)}
                         error={
-                          CAMPOS_IDENTIFICACION.has(campo.campo)
-                            ? validarIdentificacion(form[campo.campo])
-                            : CAMPOS_EMAIL.has(campo.campo)
-                              ? validarEmail(form[campo.campo])
-                              : undefined
+                          campo.campo === "cli_representanteID" &&
+                          hayApoderado &&
+                          !form.cli_representanteID
+                            ? "Obligatoria si se ingresa el nombre del apoderado"
+                            : CAMPOS_IDENTIFICACION.has(campo.campo)
+                              ? validarIdentificacion(form[campo.campo])
+                              : CAMPOS_EMAIL.has(campo.campo)
+                                ? validarEmail(form[campo.campo])
+                                : undefined
                         }
                       />
                     )
