@@ -668,7 +668,7 @@ export default function ProcesosContentPage() {
                           <span className="text-muted-foreground/50 text-xs">—</span>
                         )}
                       </td>
-                      <Can permiso="ventas:edtarProces">
+                      <Can permiso="ventas:editar">
                         <td data-label="Editar" className="px-2.5 py-3 text-center">
                           <button
                             type="button"

@@ -14,6 +14,7 @@ import {
   FolderKanban,
   Landmark,
   LogOut,
+  Package,
   PieChart,
   Rocket,
   Search,
@@ -69,6 +70,10 @@ type NavItem = {
   permisosAlguno?: Permiso[]
 }
 
+// Roles que ven el grupo "Ventas" completo. Quien no tiene ninguno igual llega al
+// inventario (si tiene el permiso) por los accesos directos de afuera del grupo.
+const ROLES_VENTAS = ["Administrador", "Asesor de Ventas", "Gestion"]
+
 const NAV_ITEMS: NavItem[] = [
   { label: "Inicio", icon: Rocket, href: "/" },
   { label: "Cotizaciones", icon: Calculator, href: "/gestion/cotizaciones" },
@@ -110,7 +115,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: "Ventas",
     icon: DollarSign,
-    rolesPermitidos: ["Administrador", "Asesor de Ventas"],
+    rolesPermitidos: ROLES_VENTAS,
     children: [
       { label: "Nueva Venta", href: "/proyectos", permiso: "ventas:nueva" },
       {
@@ -124,6 +129,22 @@ const NAV_ITEMS: NavItem[] = [
         permiso: "inventario:gestion",
       },
     ],
+  },
+  // Las mismas páginas de inventario de arriba, pero sueltas para quien no tiene un rol
+  // de ROLES_VENTAS (ese ya las ve dentro de "Ventas"); cada una sigue pidiendo su permiso.
+  {
+    label: "Inventario",
+    icon: Package,
+    href: "/ventas/inventario/catalogo",
+    permiso: "inventario:ver",
+    rolesExcluidos: ROLES_VENTAS,
+  },
+  {
+    label: "Gestión inventario",
+    icon: Package,
+    href: "/ventas/inventario",
+    permiso: "inventario:gestion",
+    rolesExcluidos: ROLES_VENTAS,
   },
   {
     label: "Revisión de documentos",

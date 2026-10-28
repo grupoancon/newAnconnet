@@ -105,6 +105,15 @@ async function main() {
     create: { recurso: "ofertas", accion: "editar" },
   })
 
+  // Permiso para editar un proceso ya creado (lápiz "Editar proceso" de la tabla de
+  // Procesos y PATCH /procesos/:id del API) — separado de "ventas:crear". El API no le
+  // da bypass al rol Administrador: hay que asignárselo también desde /admin/roles.
+  await prisma.permiso.upsert({
+    where: { recurso_accion: { recurso: "ventas", accion: "editar" } },
+    update: {},
+    create: { recurso: "ventas", accion: "editar" },
+  })
+
   // Permiso puntual para aprobar/devolver el pago de un proceso — mismo patron que
   // "ofertas:revisar": se asigna desde /admin/roles al rol revisor que corresponda,
   // nunca al mismo asesor que ingresa el pago.
