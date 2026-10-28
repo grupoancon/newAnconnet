@@ -540,6 +540,14 @@ export function listarAsesoresDeVentas() {
   return ventasFetch<AsesorVentas[]>("/asesores")
 }
 
+// GET /ventas/asesores/telefono?nombre= — teléfono guardado en el usuario del asesor
+// (con prefijo, "+593987654321"), o null si no tiene o no hay usuario con ese nombre.
+export function obtenerTelefonoAsesor(nombre: string) {
+  return ventasFetch<{ telefono: string | null }>(
+    `/asesores/telefono?nombre=${encodeURIComponent(nombre)}`
+  )
+}
+
 // GET /ventas/representantes-empresa — usuarios con permiso "ofertas:revisar", para el
 // select de "Representante de la empresa (firma)" del reporte imprimible de oferta.
 export function listarRepresentantesEmpresa() {

@@ -351,7 +351,7 @@ export function InventarioContent() {
   function accionesLote(lote: LoteInventario) {
     return (
       <RowActions className="justify-end">
-        <Can permiso="inventario:editar">
+        <Can permiso="inventario:gestion">
           <RowActionButton
             icon={<Pencil className="size-3.5" strokeWidth={1.8} />}
             label="Editar lote"
@@ -361,7 +361,7 @@ export function InventarioContent() {
             }}
           />
         </Can>
-        <Can permiso="inventario:editar">
+        <Can permiso="inventario:gestion">
           <RowActionButton
             icon={<CheckCircle2 className="size-3.5" strokeWidth={1.8} />}
             label="Cambiar estado"
@@ -494,7 +494,7 @@ export function InventarioContent() {
                       Importar lotes
                     </Button>
                   </Can>
-                  <Can permiso="inventario:crear">
+                  <Can permiso="inventario:gestion">
                     <Button
                       size="sm"
                       onClick={() => {

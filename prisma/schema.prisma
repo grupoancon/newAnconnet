@@ -1070,6 +1070,7 @@ model user {
   anosTrabajados                                        Int?
   cargo                                                 String?        @db.VarChar(255)
   departamento                                          String?        @db.VarChar(255)
+  telefono                                              String?        @db.VarChar(30)
   empresa                                               String?        @db.VarChar(255)
   account                                               account[]
   holidays                                              holidays[]

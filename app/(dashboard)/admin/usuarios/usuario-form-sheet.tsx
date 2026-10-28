@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react"
 
+import { PhoneField } from "@/components/shared/phone-field"
 import { useToast } from "@/components/shared/toast-provider"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -20,6 +21,8 @@ import {
   updateUser,
   type UsuarioAdmin,
 } from "@/lib/api/admin-api"
+import { separarTelefono } from "@/lib/const/codigos-telefonicos"
+import { validarTelefono } from "@/lib/validations/telefono"
 
 function Campo({
   label,
@@ -56,6 +59,8 @@ export function UsuarioFormSheet({
   const [password, setPassword] = useState("")
   const [cargo, setCargo] = useState("")
   const [departamento, setDepartamento] = useState("")
+  const [telefonoPrefijo, setTelefonoPrefijo] = useState("+593")
+  const [telefonoNumero, setTelefonoNumero] = useState("")
   const [empresa, setEmpresa] = useState("")
   const [esAdmin, setEsAdmin] = useState(false)
   const [isSaving, startSaving] = useTransition()
@@ -67,11 +72,20 @@ export function UsuarioFormSheet({
     setPassword("")
     setCargo(usuario?.cargo ?? "")
     setDepartamento(usuario?.departamento ?? "")
+    const telefono = separarTelefono(usuario?.telefono ?? "")
+    setTelefonoPrefijo(telefono.prefijo)
+    setTelefonoNumero(telefono.numero)
     setEmpresa(usuario?.empresa ?? "IC")
     setEsAdmin(usuario?.role === "admin")
   }, [open, usuario])
 
+  const errorTelefono = validarTelefono(telefonoNumero)
+  // Mismo formato que los demás teléfonos de la app: `${prefijo}${numero}`, vacío si no
+  // hay número.
+  const telefono = telefonoNumero.trim() ? `${telefonoPrefijo}${telefonoNumero.trim()}` : ""
+
   const puedeGuardar =
+    !errorTelefono &&
     nombre.trim().length > 0 &&
     email.trim().length > 0 &&
     (esEdicion || password.trim().length >= 8)
@@ -85,6 +99,7 @@ export function UsuarioFormSheet({
             cargo: cargo.trim(),
             departamento: departamento.trim(),
             empresa: empresa.trim(),
+            telefono,
           })
           let usuarioFinal = user
           const rolDeseado = esAdmin ? "admin" : "user"
@@ -104,6 +119,7 @@ export function UsuarioFormSheet({
               cargo: cargo.trim(),
               departamento: departamento.trim(),
               empresa: empresa.trim() || "IC",
+              telefono,
             },
           })
           toast({ variant: "success", description: "Usuario creado." })
@@ -168,6 +184,18 @@ export function UsuarioFormSheet({
               value={departamento}
               onChange={(event) => setDepartamento(event.target.value)}
             />
+          </div>
+          <div>
+            <PhoneField
+              label="Teléfono"
+              prefijo={telefonoPrefijo}
+              numero={telefonoNumero}
+              onChangePrefijo={setTelefonoPrefijo}
+              onChangeNumero={setTelefonoNumero}
+            />
+            {errorTelefono ? (
+              <p className="text-destructive mt-1.5 text-xs">{errorTelefono}</p>
+            ) : null}
           </div>
           <Campo
             label="Empresa"

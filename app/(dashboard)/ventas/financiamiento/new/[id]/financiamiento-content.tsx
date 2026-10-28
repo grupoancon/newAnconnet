@@ -2172,11 +2172,26 @@ export function FinanciamientoContent({ id }: { id: string }) {
     }
   }
 
+  // Al quitar cuotas "de más" hay que fijar la cuota mensual con la que se armó el
+  // cronograma. Si solo se bajara el N.º de meses, al guardar el backend recalcula la
+  // cuota base con menos meses (sale más alta), el préstamo se termina de pagar antes
+  // y vuelven a aparecer cuotas "de más". Si ya había una cuota sugerida, esa es la
+  // que se usó y no se toca.
+  function fijarCuotaDelCronograma() {
+    if (!financiamiento || esContadoLike(financType) || cuotaSugerida.trim() !== "") return
+    const cuota = calcularCuotaMensualSugerida(
+      Number(financiamiento.total_financ) || 0,
+      financiamiento.no_cuotas ?? 0
+    )
+    if (cuota != null) setCuotaSugerida(cuota.toFixed(2))
+  }
+
   // Quita una fila "de más" (sobrante) del cronograma, una por una, y ajusta el N.º
   // de meses de la configuración al número real de cuotas que quedan — sigue
   // haciendo falta Guardar/Regenerar cuotas para persistirlo en el backend.
   function quitarFilaSobranteCronograma(mes: number) {
     if (!financiamiento?.detalle) return
+    fijarCuotaDelCronograma()
     const nuevoDetalle = financiamiento.detalle.filter((fila) => fila.mes !== mes)
     setFinanciamiento({
       ...financiamiento,
@@ -2190,6 +2205,7 @@ export function FinanciamientoContent({ id }: { id: string }) {
   // "Arreglar" de la verificación antes de guardar.
   function quitarTodasFilasSobrantes() {
     if (!financiamiento?.detalle) return
+    fijarCuotaDelCronograma()
     const nuevoDetalle = financiamiento.detalle.filter((fila) => !fila.sobrante)
     setFinanciamiento({
       ...financiamiento,
@@ -2346,6 +2362,15 @@ export function FinanciamientoContent({ id }: { id: string }) {
     setProblemasVerificacion(verificarFinanciamiento())
     setVerificacionAbierta(true)
   }
+
+  // Después de un "Arreglar"/"Quitar todas" del diálogo hay que volver a verificar,
+  // pero recién en el render siguiente: llamarlo en el mismo clic leía el cronograma
+  // de antes del arreglo y el aviso seguía apareciendo aunque ya se había corregido.
+  const [reverificar, setReverificar] = useState(0)
+  useEffect(() => {
+    if (reverificar > 0) setProblemasVerificacion(verificarFinanciamiento())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reverificar])
 
   async function confirmarGuardadoFinal() {
     const exito = await manejarGenerarTabla(true)
@@ -3530,7 +3555,7 @@ export function FinanciamientoContent({ id }: { id: string }) {
                       className={cn(problema.bloqueante && "self-start")}
                       onClick={() => {
                         problema.accion!.ejecutar()
-                        setProblemasVerificacion(verificarFinanciamiento())
+                        setReverificar((n) => n + 1)
                       }}
                     >
                       {problema.accion.etiqueta}

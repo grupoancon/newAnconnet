@@ -68,6 +68,7 @@ import {
   type OfertaFormInput,
   type PersonaProceso,
   type ProcesoBackend,
+  obtenerTelefonoAsesor,
 } from "@/lib/api/ventas-api"
 import { useBorradorAutomatico } from "@/lib/borradores/use-borrador-automatico"
 import { nacionalidades } from "@/lib/const/nacionalidades"
@@ -609,6 +610,30 @@ export function OfertaCompraContent({ id }: { id: string }) {
             cli_transIntermediario: ofertaExistente.cli_transIntermediario || "No",
             cli_transRelacionDueno: ofertaExistente.cli_transRelacionDueno ?? "",
           })
+        }
+
+        // Si la oferta todavía no tiene "Teléfono del asesor", se precarga con el del
+        // primer asesor del proceso (cli_asesor guarda los nombres separados por coma,
+        // en el orden en que se eligieron). Solo rellena si el campo sigue vacío, y si
+        // falla la consulta el asesor lo escribe a mano como antes.
+        const primerAsesor = (procesoData.cli_asesor ?? "").split(",")[0]?.trim() ?? ""
+        if (!ofertaExistente?.cli_asesorTelf && primerAsesor) {
+          const { telefono } = await obtenerTelefonoAsesor(primerAsesor).catch(() => ({
+            telefono: null,
+          }))
+          if (cancelado) return
+          if (telefono) {
+            const tel = separarTelefono(telefono)
+            setForm((actual) =>
+              actual.cli_asesorTelf
+                ? actual
+                : {
+                    ...actual,
+                    cli_asesorTelf: tel.numero,
+                    cli_asesorTelf_prefijo: tel.prefijo,
+                  }
+            )
+          }
         }
       } catch (err) {
         if (cancelado) return

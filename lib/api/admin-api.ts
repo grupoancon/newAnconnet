@@ -63,6 +63,7 @@ export type UsuarioAdmin = {
   activo?: boolean | null
   cargo?: string | null
   departamento?: string | null
+  telefono?: string | null
   empresa?: string | null
   fechaIngreso?: string | null
   createdAt: string
