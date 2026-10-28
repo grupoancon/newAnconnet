@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "@/lib/navigation"
 import {
   CalendarPlus,
   CheckCircle2,
@@ -8,6 +9,7 @@ import {
   Download,
   Hourglass,
   Palmtree,
+  Plus,
   XCircle,
 } from "lucide-react"
 
@@ -123,6 +125,7 @@ function solicitudVacacionActiva(
 }
 
 export function VacacionesTab() {
+  const router = useRouter()
   const toast = useToast()
   const puedeGestionar = useCan("rrhh:gestionar")
 
@@ -451,6 +454,17 @@ export function VacacionesTab() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Solo sin una solicitud activa: el backend igual bloquea pedir otra mientras
+          haya una pendiente o aprobada y vigente. */}
+      {misSolicitudes && !solicitudActiva && (
+        <div className="-mb-2.5 flex justify-end">
+          <Button onClick={() => router.push("/rrhh/vacaciones/nueva")}>
+            <Plus className="size-3.5" strokeWidth={1.8} />
+            Nueva solicitud
+          </Button>
+        </div>
+      )}
+
       {puedeGestionar && (
         <div className="bg-card border-border rounded-lg border">
           <div className="border-border text-muted-foreground border-b px-5 py-3.5 text-xs font-bold tracking-wide">
@@ -779,8 +793,8 @@ export function VacacionesTab() {
               <EmptyState title="No se pudo cargar" description={error} dashed />
             ) : periodosDisponibles!.length === 0 ? (
               <EmptyState
-                title="Todavía no hay periodos disponibles"
-                description="Cuando RRHH habilite fechas para elegir vacaciones, van a aparecer acá."
+                title="Todavía no hay periodos publicados por RRHH"
+                description="Puedes pedir tus vacaciones con tus propias fechas desde “Nueva solicitud”."
               />
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -813,7 +827,7 @@ export function VacacionesTab() {
           <div className="p-5">
             <EmptyState
               title="Todavía no has solicitado vacaciones"
-              description="Elegí un periodo disponible arriba para crear tu primera solicitud."
+              description="Usa “Nueva solicitud” o elige un periodo publicado por RRHH."
             />
           </div>
         ) : (

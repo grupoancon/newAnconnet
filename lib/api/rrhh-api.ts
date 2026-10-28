@@ -349,8 +349,11 @@ export type SolicitudVacacionConCreador = SolicitudVacacionBackend & {
   creador_nombre: string | null
 }
 
+// O un periodo publicado por RRHH (periodoId), o fechas libres (fechaInicio/fechaFin).
 export type CrearSolicitudVacacionInput = {
-  periodoId: number
+  periodoId?: number
+  fechaInicio?: string // "YYYY-MM-DD"
+  fechaFin?: string
   detalle?: string
 }
 
