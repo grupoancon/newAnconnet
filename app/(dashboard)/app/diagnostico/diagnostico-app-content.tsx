@@ -47,15 +47,18 @@ import {
 } from "./detalle-diagnostico-sheet"
 import { haceCuanto, VARIANTE_NIVEL } from "./formato"
 import { GraficoTendencia, LeyendaErrores, ListaBarras } from "./graficos"
+import { EstadoSistemaCard } from "./estado-sistema"
+import { VistaEnVivo } from "./vista-en-vivo"
 import { VistaUsuario } from "./vista-usuario"
 
 const TITULOS_PESTANA: Record<Pestana, string> = {
   errores: "Errores agrupados",
   eventos: "Todos los eventos",
   usuario: "Interacciones por usuario",
+  vivo: "Monitoreo en vivo",
 }
 
-type Pestana = "errores" | "eventos" | "usuario"
+type Pestana = "errores" | "eventos" | "usuario" | "vivo"
 
 const EVENTOS_POR_PAGINA = 60
 
@@ -125,7 +128,7 @@ export function DiagnosticoAppContent() {
   }, [ventana, recarga])
 
   useEffect(() => {
-    if (pestana === "usuario") return
+    if (pestana === "usuario" || pestana === "vivo") return
     let vigente = true
     setErrorLista(null)
     if (pestana === "errores") {
@@ -237,6 +240,8 @@ export function DiagnosticoAppContent() {
           />
         ) : null}
 
+        <EstadoSistemaCard />
+
         {/* Indicadores */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <Kpi
@@ -316,6 +321,7 @@ export function DiagnosticoAppContent() {
                   { id: "errores", label: "Errores agrupados" },
                   { id: "eventos", label: "Todos los eventos" },
                   { id: "usuario", label: "Por usuario" },
+                  { id: "vivo", label: "En vivo" },
                 ]}
                 value={pestana}
                 onChange={(id) => setPestana(id as Pestana)}
@@ -323,7 +329,9 @@ export function DiagnosticoAppContent() {
             }
           />
 
-          {pestana === "usuario" ? (
+          {pestana === "vivo" ? (
+            <VistaEnVivo />
+          ) : pestana === "usuario" ? (
             <VistaUsuario
               usuarioId={usuarioId}
               onCambiarUsuario={setUsuarioId}

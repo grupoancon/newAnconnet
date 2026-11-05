@@ -47,6 +47,12 @@ import {
   type ComponenteAlicuota,
   type LoteInventario,
 } from "@/lib/api/inventario-api"
+import {
+  abonoInicialDeTabla,
+  filasAbonoInicialDeTabla,
+  motivoPromocionNoAplica,
+  partesCondicionesPromocion,
+} from "@/lib/promociones"
 import { cn } from "@/lib/utils"
 import {
   VentasApiError,
@@ -2026,6 +2032,17 @@ export function RefinanciamientoContent({ id }: { id: string }) {
     setComentarios((anterior) => anterior.filter((_, i) => i !== indice))
   }
 
+  // Abono inicial con el que se evalúan las condiciones de las promociones: el de la
+  // tabla de entrada si ya se generó; si no, el que está escrito en el generador.
+  const abonoInicialActual = entradasTabla.length
+    ? abonoInicialDeTabla(entradasTabla)
+    : Number(abonoInicialGenerar) || 0
+  // Cuántas fechas de abono inicial hay (más de una = repartido); sin tabla todavía,
+  // se toma como una sola.
+  const filasAbonoInicialActual = entradasTabla.length
+    ? filasAbonoInicialDeTabla(entradasTabla)
+    : 1
+
   function alternarPromocion(idPromo: number) {
     setPromocionesSeleccionadas((anterior) =>
       anterior.includes(idPromo)
@@ -2804,22 +2821,73 @@ export function RefinanciamientoContent({ id }: { id: string }) {
                         </div>
                       ) : (
                         <div className="flex flex-col gap-2">
-                          {promocionesActivas.map((promo) => (
-                            <label
-                              key={promo.id}
-                              className="flex cursor-pointer items-center gap-2 text-sm"
-                            >
-                              <Checkbox
-                                checked={promocionesSeleccionadas.includes(promo.id)}
-                                onCheckedChange={() => alternarPromocion(promo.id)}
-                              />
-                              {promo.nombre} (
-                              {promo.tipo_efecto === "porcentaje"
-                                ? `${promo.valor_efecto}%`
-                                : formatearMoneda(promo.valor_efecto)}
-                              )
-                            </label>
-                          ))}
+                          {promocionesActivas.map((promo) => {
+                            const seleccionada = promocionesSeleccionadas.includes(
+                              promo.id
+                            )
+                            // Condiciones de la promoción (tipo de financiamiento y
+                            // abono inicial mínimo, ver lib/promociones.ts): si no se
+                            // cumplen no se puede marcar; si ya estaba marcada se avisa
+                            // (el backend la rechaza al guardar).
+                            const motivo = motivoPromocionNoAplica(
+                              promo,
+                              financType,
+                              abonoInicialActual,
+                              filasAbonoInicialActual
+                            )
+                            const condiciones = partesCondicionesPromocion(promo)
+                            return (
+                              <label
+                                key={promo.id}
+                                className={cn(
+                                  "flex items-start gap-2 text-sm",
+                                  motivo && !seleccionada
+                                    ? "cursor-not-allowed opacity-60"
+                                    : "cursor-pointer"
+                                )}
+                              >
+                                <Checkbox
+                                  className="mt-0.5"
+                                  checked={seleccionada}
+                                  disabled={!!motivo && !seleccionada}
+                                  onCheckedChange={() => alternarPromocion(promo.id)}
+                                />
+                                <span>
+                                  {promo.nombre} (
+                                  {promo.tipo_efecto === "porcentaje"
+                                    ? `${promo.valor_efecto}%`
+                                    : formatearMoneda(promo.valor_efecto)}
+                                  )
+                                  {(condiciones.tipos ||
+                                    condiciones.abonoMinimo ||
+                                    condiciones.sinRepartir) && (
+                                    <span className="text-muted-foreground block text-xs">
+                                      {condiciones.tipos}
+                                      {condiciones.tipos && condiciones.abonoMinimo && " · "}
+                                      {condiciones.abonoMinimo && (
+                                        <>
+                                          Abono inicial ≥{" "}
+                                          <span className="text-foreground font-bold">
+                                            {condiciones.abonoMinimo}
+                                          </span>
+                                        </>
+                                      )}
+                                      {condiciones.sinRepartir &&
+                                        (condiciones.tipos || condiciones.abonoMinimo) &&
+                                        " · "}
+                                      {condiciones.sinRepartir && "Abono sin repartir"}
+                                    </span>
+                                  )}
+                                  {motivo && seleccionada && (
+                                    <span className="text-destructive block text-xs">
+                                      Ya no aplica ({motivo}). Quítala o
+                                      ajusta el financiamiento.
+                                    </span>
+                                  )}
+                                </span>
+                              </label>
+                            )
+                          })}
                         </div>
                       )}
                     </div>

@@ -113,7 +113,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
             obtenerFinanciamiento(idNumero),
             obtenerOferta(idNumero),
             listarClientesExtra(idNumero),
-            listarRepresentantesActivos(),
+            listarRepresentantesActivos("financiamiento"),
           ])
         if (cancelado) return
         setLoteInfo(lote)
@@ -186,7 +186,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
   const columnasAlicuotaEntrada = (() => {
     const conComponentes = entradas.find((fila) => fila.alicuotas?.length)
     if (conComponentes?.alicuotas) return conComponentes.alicuotas.map((c) => c.nombre)
-    return entradas.length > 0 ? ["Alicuota"] : []
+    return entradas.length > 0 ? ["Alícuota"] : []
   })()
 
   function alicuotasDeFilaEntrada(fila: EntradaPago): number[] {
@@ -202,7 +202,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
   const columnasAlicuotaCronograma = (() => {
     const conComponentes = cronograma.find((fila) => fila.alicuotas?.length)
     if (conComponentes?.alicuotas) return conComponentes.alicuotas.map((c) => c.nombre)
-    return cronograma.length > 0 ? ["Alicuota"] : []
+    return cronograma.length > 0 ? ["Alícuota"] : []
   })()
 
   function alicuotasDeFilaCronograma(fila: CuotaAmortizacion): number[] {
@@ -346,7 +346,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
         <div className="p-8">
           <EmptyState
             title="Este financiamiento todavía no está listo para imprimir"
-            description="El anexo se puede imprimir una vez que el financiamiento fue guardado como ingresado (sale marcado como BORRADOR hasta que se apruebe)."
+            description="El anexo se puede imprimir una vez que el financiamiento se haya guardado como ingresado (sale marcado como BORRADOR hasta que se apruebe)."
             dashed
           />
         </div>
@@ -366,7 +366,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                 Representante de la empresa (firma)
               </div>
               <SelectField
-                placeholder="Seleccione quién firma por la empresa"
+                placeholder="Selecciona quién firma por la empresa"
                 options={representantesDisponibles.map((persona) => persona.nombre)}
                 value={representanteEmpresa}
                 onValueChange={setRepresentanteEmpresa}
@@ -470,7 +470,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
               <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
                 <Campo
                   label="FECHA"
-                  valor={financiamiento.created_at?.slice(0, 10) ?? "—"}
+                  valor={formatearFecha(financiamiento.created_at)}
                 />
                 <Campo
                   label="TIPO DE FINANCIAMIENTO"
@@ -486,7 +486,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                   valor={formatearNumero(loteInfo?.pvp ?? proceso?.lote_price)}
                 />
                 <Campo
-                  label="MTS"
+                  label="ÁREA (M²)"
                   valor={formatearNumero(loteInfo?.areaUtil ?? proceso?.lote_mts)}
                 />
                 <Campo
@@ -501,7 +501,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                 )}
                 {Number(financiamiento.promo_discount) > 0 && (
                   <Campo
-                    label="DESCUENTO PROMOCIÓN"
+                    label="DESCUENTO POR PROMOCIÓN"
                     valor={formatearNumero(financiamiento.promo_discount)}
                   />
                 )}
@@ -517,7 +517,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                 <tr>
                   <Th ancho="18%">Forma de Pago</Th>
                   <Th ancho="14%">Fecha de Pago</Th>
-                  <Th ancho="14%">Abono Lote</Th>
+                  <Th ancho="14%">Abono al Lote</Th>
                   {columnasAlicuotaEntrada.map((nombre, indice) => (
                     <Th key={indice}>{nombre}</Th>
                   ))}
@@ -580,13 +580,13 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                         <Th ancho="11%">Fecha de Pago</Th>
                         <Th ancho="10%">Capital</Th>
                         <Th ancho="10%">Interés</Th>
-                        <Th ancho="10%">Abono Lote</Th>
+                        <Th ancho="10%">Abono al Lote</Th>
                         {columnasAlicuotaCronograma.map((nombre, indice) => (
                           <Th key={indice}>{nombre}</Th>
                         ))}
                         <Th ancho="10%">Escritura</Th>
                         <Th ancho="12%">Cuota a Cancelar</Th>
-                        <Th ancho="12%">Saldo Capital</Th>
+                        <Th ancho="12%">Saldo de Capital</Th>
                       </tr>
                     </thead>
                     <tbody>

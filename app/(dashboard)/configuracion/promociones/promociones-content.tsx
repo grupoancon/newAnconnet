@@ -5,6 +5,7 @@ import { Pencil, Plus, Trash2, X } from "lucide-react"
 
 import { DashboardTopbar } from "@/components/shared/dashboard-topbar"
 import { EmptyState } from "@/components/shared/empty-state"
+import { MultiSelectField } from "@/components/shared/multi-select-field"
 import { PageHeader } from "@/components/shared/page-header"
 import { SelectField } from "@/components/shared/select-field"
 import { Spinner } from "@/components/shared/spinner"
@@ -28,9 +29,23 @@ import {
   listarPromociones,
   type PromocionBackend,
 } from "@/lib/api/ventas-api"
+import {
+  describirCondicionesPromocion,
+  permiteAbonoRepartido,
+} from "@/lib/promociones"
 import { cn } from "@/lib/utils"
 
 const TIPOS_EFECTO = ["porcentaje", "monto_fijo"]
+
+// Tipos de financiamiento que se pueden exigir como condición ("Crédito BIESS (Sin
+// Interés)" solo existe en Refinanciamiento, que también usa estas promociones).
+const TIPOS_FINANCIAMIENTO_PROMOCION = [
+  "Crédito directo",
+  "Crédito BIESS",
+  "Contado",
+  "Mixto",
+  "Crédito BIESS (Sin Interés)",
+]
 
 type FormState = {
   nombre: string
@@ -38,6 +53,11 @@ type FormState = {
   valorEfecto: string
   fechaInicio: string
   fechaFin: string
+  // Condiciones: vacío = sin restricción.
+  tiposFinanciamiento: string[]
+  abonoInicialMinimo: string
+  // false = no aplica si el abono inicial se reparte en varias fechas.
+  permiteAbonoRepartido: boolean
 }
 
 const FORM_VACIO: FormState = {
@@ -46,6 +66,9 @@ const FORM_VACIO: FormState = {
   valorEfecto: "",
   fechaInicio: "",
   fechaFin: "",
+  tiposFinanciamiento: [],
+  abonoInicialMinimo: "",
+  permiteAbonoRepartido: true,
 }
 
 function formatearMoneda(valor: string | number | null | undefined): string {
@@ -96,6 +119,12 @@ export function PromocionesContent() {
       valorEfecto: promo.valor_efecto ?? "",
       fechaInicio: promo.fecha_inicio ?? "",
       fechaFin: promo.fecha_fin ?? "",
+      tiposFinanciamiento: promo.tipos_financiamiento ?? [],
+      abonoInicialMinimo:
+        Number(promo.abono_inicial_minimo ?? 0) > 0
+          ? String(Number(promo.abono_inicial_minimo))
+          : "",
+      permiteAbonoRepartido: permiteAbonoRepartido(promo),
     })
   }
 
@@ -114,6 +143,9 @@ export function PromocionesContent() {
         valorEfecto: Number(form.valorEfecto),
         fechaInicio: form.fechaInicio || undefined,
         fechaFin: form.fechaFin || undefined,
+        tiposFinanciamiento: form.tiposFinanciamiento,
+        abonoInicialMinimo: Number(form.abonoInicialMinimo) || null,
+        permiteAbonoRepartido: form.permiteAbonoRepartido,
       }
       if (editandoId) {
         const actualizada = await actualizarPromocion(editandoId, datos)
@@ -229,6 +261,45 @@ export function PromocionesContent() {
               onChange={(v) => setForm((f) => ({ ...f, fechaFin: v }))}
             />
           </div>
+          <div className="border-border mt-4 border-t pt-4">
+            <div className="mb-1 text-sm font-semibold">Condiciones para aplicarla</div>
+            <p className="text-muted-foreground mb-3 text-xs">
+              Déjalas vacías para que aplique siempre. Todas las que llenes se tienen
+              que cumplir a la vez.
+            </p>
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+              <MultiSelectField
+                label="Solo para estos tipos de financiamiento"
+                placeholder="Cualquier tipo"
+                options={TIPOS_FINANCIAMIENTO_PROMOCION}
+                value={form.tiposFinanciamiento}
+                onChange={(v) => setForm((f) => ({ ...f, tiposFinanciamiento: v }))}
+              />
+              <TextField
+                label="Abono inicial mínimo ($)"
+                type="number"
+                placeholder="Sin mínimo"
+                value={form.abonoInicialMinimo}
+                onChange={(v) => setForm((f) => ({ ...f, abonoInicialMinimo: v }))}
+              />
+            </div>
+            <label className="mt-3.5 flex cursor-pointer items-start gap-2 text-sm">
+              <Checkbox
+                className="mt-0.5"
+                checked={form.permiteAbonoRepartido}
+                onCheckedChange={(v) =>
+                  setForm((f) => ({ ...f, permiteAbonoRepartido: v === true }))
+                }
+              />
+              <span>
+                Aplica si el abono inicial se reparte en varias fechas
+                <span className="text-muted-foreground block text-xs">
+                  Desmárcalo para que solo aplique cuando el abono inicial se paga en una
+                  sola fecha (ej. $1000 repartido en $500 + $500 no califica).
+                </span>
+              </span>
+            </label>
+          </div>
           <div className="mt-3.5">
             <Button
               type="button"
@@ -276,6 +347,7 @@ export function PromocionesContent() {
                     <th className="px-4.5 py-2.75 text-left">Tipo</th>
                     <th className="px-4.5 py-2.75 text-right">Valor</th>
                     <th className="px-4.5 py-2.75 text-left">Vigencia</th>
+                    <th className="px-4.5 py-2.75 text-left">Condiciones</th>
                     <th className="px-4.5 py-2.75 text-center">Activa</th>
                     <th className="px-2 py-2.75" />
                   </tr>
@@ -313,6 +385,12 @@ export function PromocionesContent() {
                         {promo.fecha_inicio || promo.fecha_fin
                           ? `${promo.fecha_inicio ?? "…"} a ${promo.fecha_fin ?? "…"}`
                           : "Sin límite"}
+                      </td>
+                      <td
+                        data-label="Condiciones"
+                        className="text-muted-foreground px-4.5 py-2.5"
+                      >
+                        {describirCondicionesPromocion(promo) ?? "Siempre"}
                       </td>
                       <td data-label="Activa" className="px-4.5 py-2.5 text-center">
                         <Checkbox

@@ -6,12 +6,16 @@
 // app/(dashboard)/app/diagnostico/datos.ts.
 import { avisarSiSesionVencida } from "@/lib/api/sesion-vencida"
 import type {
+  AccionEnVivo,
+  CausaServidor,
   DetalleEvento,
+  EstadoSistema,
   Evento,
   GrupoError,
   MigaDePan,
   Nivel,
   Resumen,
+  SesionEnVivo,
   SesionTelemetria,
   Tendencias,
   Ventana,
@@ -213,6 +217,32 @@ export async function obtenerDetalleEvento(id: string): Promise<DetalleEvento | 
     `/events/${encodeURIComponent(id)}`
   )
   return fila ? aDetalle(fila) : null
+}
+
+// GET /telemetry/health
+export function obtenerEstadoSistema(): Promise<EstadoSistema> {
+  return telemetriaFetch<EstadoSistema>("/health")
+}
+
+// GET /telemetry/server-errors/:requestId — null si el servidor no registró causa.
+export function obtenerCausaServidor(requestId: string): Promise<CausaServidor | null> {
+  return telemetriaFetch<CausaServidor | null>(
+    `/server-errors/${encodeURIComponent(requestId)}`,
+  )
+}
+
+// GET /telemetry/live
+export async function obtenerSesionesEnVivo(): Promise<SesionEnVivo[]> {
+  const respuesta = await telemetriaFetch<{ sessions: SesionEnVivo[] }>("/live")
+  return respuesta.sessions
+}
+
+// GET /telemetry/live/:session
+export async function obtenerAccionesEnVivo(session: string): Promise<AccionEnVivo[]> {
+  const respuesta = await telemetriaFetch<{ events: AccionEnVivo[] }>(
+    `/live/${encodeURIComponent(session)}`,
+  )
+  return respuesta.events
 }
 
 // GET /telemetry/sessions/:session

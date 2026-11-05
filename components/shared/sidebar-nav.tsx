@@ -168,6 +168,7 @@ const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Gestión de usuarios", href: "/app/usuarios" },
       { label: "Notificaciones", href: "/app/notificaciones" },
+      { label: "Novedades", href: "/app/novedades" },
       { label: "Diagnóstico", href: "/app/diagnostico" },
     ],
   },

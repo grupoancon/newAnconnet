@@ -274,7 +274,7 @@ export function OfertaReporteContent({ id }: { id: string }) {
         { campo: "cli_trabCargo", label: "Cargo", valor: oferta.cli_trabCargo ?? "—" },
         {
           campo: "cli_trabTiempo",
-          label: "Ciudad (trabajo)",
+          label: "Antigüedad (años)",
           valor: oferta.cli_trabTiempo ?? "—",
         },
         {

@@ -563,7 +563,7 @@ backend (detalle y plantilla en `lib/api/README.md`).
 | `rrhh-api.ts` | `/rrhh` | `mi-perfil`, permisos, préstamos, colaboradores/saldo, periodos y solicitudes de vacaciones, vacaciones colectivas, documentos (URLs firmadas) |
 | `reportes-api.ts` | `/reportes` | `administrativo/ventas-por-proyecto`, `mis-reportes`, `definiciones/:slug/datos`, `admin/datasets`, `admin/definiciones` |
 | `auditoria-api.ts` | `/auditoria` | `eventos` (envío desde web), `logs`, `logs/:id`, `catalogos` |
-| `telemetria-api.ts` | `/telemetry` | `summary`, `trends`, `errors`, `events`, `events/:id`, `sessions/:session`, usuarios recientes |
+| `telemetria-api.ts` | `/telemetry` | `summary`, `trends`, `errors`, `events`, `events/:id`, `sessions/:session`, `live`, `live/:session`, usuarios recientes |
 | `notificaciones-api.ts` | `/notifications` | Crear, historial, detalle, entrega, editar, cancelar, `send-now` |
 | `notificaciones-internas-api.ts` | `/notificaciones-internas` | Mis notificaciones, no leídas, marcar leída(s) |
 | `dashboard-api.ts` | `/dashboard` | `resumen` (KPIs + ventas por mes) |
@@ -743,7 +743,7 @@ ve lo suyo; `rrhh:gestionar` revisa todo, aprueba/rechaza y administra.
 | --- | --- | --- |
 | `/app/usuarios` | Administrador | **Datos de ejemplo**. Endpoints a conectar documentados en `app/usuarios/datos.ts`. |
 | `/app/notificaciones` | Administrador | **Datos de ejemplo**. Envío individual / global / segmentado (mora, cédulas, lotes, prefijos), programación, vista previa de pantalla bloqueada. |
-| `/app/diagnostico` | `app:diagnostico` | **Conectado** a `/telemetry/*`: resumen, tendencias 24h/7d, grupos de error, eventos, sesiones, vista por usuario (máx. 7 días / 500 registros). |
+| `/app/diagnostico` | `app:diagnostico` | **Conectado** a `/telemetry/*`: resumen, tendencias 24h/7d, grupos de error, eventos, sesiones, vista por usuario (máx. 7 días / 500 registros) y monitoreo en vivo (actualiza cada 5 s). |
 
 `/notificaciones` y `/notificaciones/historial` son una versión anterior del envío push,
 conectada a `notificacionesApi`, fuera del menú.

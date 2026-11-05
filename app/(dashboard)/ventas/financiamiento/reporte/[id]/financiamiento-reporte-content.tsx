@@ -338,7 +338,7 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                     mono
                   />
                   <StaticField
-                    label="Mts"
+                    label="Área (m²)"
                     value={formatearMetraje(loteInfo?.areaUtil ?? proceso?.lote_mts)}
                     mono
                   />
@@ -351,7 +351,7 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                   )}
                   {Number(financiamiento.promo_discount) > 0 && (
                     <StaticField
-                      label="Descuento promoción"
+                      label="Descuento por promoción"
                       value={formatearMoneda(financiamiento.promo_discount)}
                       mono
                     />
@@ -374,7 +374,7 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                         <tr className="bg-muted/60 text-muted-foreground text-[10.5px] font-bold tracking-wide">
                           <th className="px-4.5 py-2.5 text-left">Forma de pago</th>
                           <th className="px-4.5 py-2.5 text-left">Fecha de pago</th>
-                          <th className="px-4.5 py-2.5 text-right">Abono lote</th>
+                          <th className="px-4.5 py-2.5 text-right">Abono al lote</th>
                           {columnasAlicuotaEntrada.map((nombre, indice) => (
                             <th key={indice} className="px-4.5 py-2.5 text-right">
                               {nombre}
@@ -481,7 +481,7 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                                 </th>
                                 <th className="px-4.5 py-2.75 text-right">Capital</th>
                                 <th className="px-4.5 py-2.75 text-right">Interés</th>
-                                <th className="px-4.5 py-2.75 text-right">Abono lote</th>
+                                <th className="px-4.5 py-2.75 text-right">Abono al lote</th>
                                 {columnasAlicuotaCronograma.map((nombre, indice) => (
                                   <th key={indice} className="px-4.5 py-2.75 text-right">
                                     {nombre}
@@ -492,7 +492,7 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                                   Cuota a cancelar
                                 </th>
                                 <th className="px-4.5 py-2.75 text-right">
-                                  Saldo capital
+                                  Saldo de capital
                                 </th>
                               </tr>
                             </thead>
@@ -681,8 +681,8 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
           <SheetHeader className="border-border border-b p-5">
             <SheetTitle>Aprobar financiamiento</SheetTitle>
             <SheetDescription>
-              ¿Estás seguro de aprobar este financiamiento? Una vez aprobado queda
-              habilitado para imprimir el anexo.
+              ¿Estás seguro de que quieres aprobar este financiamiento? Una vez
+              aprobado, quedará habilitado para imprimir el anexo.
             </SheetDescription>
           </SheetHeader>
 

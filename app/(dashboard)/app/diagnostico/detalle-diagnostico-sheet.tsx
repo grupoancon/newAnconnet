@@ -15,6 +15,7 @@ import {
 import { Spinner } from "@/components/shared/spinner"
 import {
   listarEventos,
+  obtenerCausaServidor,
   obtenerDetalleEvento,
   obtenerSesion,
   TelemetriaApiError,
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils"
 
 import {
   NIVEL_LABELS,
+  type CausaServidor,
   type DetalleEvento,
   type Evento,
   type GrupoError,
@@ -266,6 +268,10 @@ export function DetalleDiagnosticoSheet({
               </Bloque>
             ) : null}
 
+            {typeof detalle.meta?.requestId === "string" ? (
+              <CausaEnServidor key={detalle.meta.requestId} requestId={detalle.meta.requestId} />
+            ) : null}
+
             {detalle.meta && Object.keys(detalle.meta).length > 0 ? (
               <Bloque titulo="Metadata">
                 <pre className="bg-muted/60 border-border max-h-52 overflow-x-auto rounded-md border p-3 font-mono text-[11px] whitespace-pre-wrap">
@@ -369,5 +375,41 @@ function Bloque({ titulo, children }: { titulo: string; children: React.ReactNod
       </p>
       {children}
     </div>
+  )
+}
+
+// Excepción que registró anconAPI para esta misma petición. Solo existe si el
+// servidor respondió 5xx: en un 4xx o un fallo de red no se muestra nada.
+function CausaEnServidor({ requestId }: { requestId: string }) {
+  const [causa, setCausa] = useState<CausaServidor | null>(null)
+
+  useEffect(() => {
+    let vigente = true
+    obtenerCausaServidor(requestId)
+      .then((c) => vigente && setCausa(c))
+      .catch(() => undefined)
+    return () => {
+      vigente = false
+    }
+  }, [requestId])
+
+  if (!causa) return null
+
+  return (
+    <Bloque titulo="Causa en el servidor">
+      <div className="bg-status-bloqueado-bg border-status-bloqueado-border rounded-md border p-3 text-xs">
+        <p className="text-status-bloqueado-fg font-semibold break-words">
+          {causa.errorName}: {causa.errorMessage}
+        </p>
+        <p className="text-foreground/80 mt-1 font-mono text-[11px]">
+          {causa.method} {causa.route}
+        </p>
+        {causa.stack ? (
+          <pre className="text-foreground/80 mt-2 max-h-52 overflow-x-auto font-mono text-[11px] whitespace-pre-wrap">
+            {causa.stack}
+          </pre>
+        ) : null}
+      </div>
+    </Bloque>
   )
 }

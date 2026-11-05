@@ -86,6 +86,55 @@ export type SesionTelemetria = {
   events: Evento[]
 }
 
+export type UltimaAccion = {
+  message: string
+  level: string
+  props: Record<string, unknown> | null
+}
+
+export type SesionEnVivo = {
+  session: string
+  userId: string | null
+  userEmail: string | null
+  platform: string | null
+  appVersion: string | null
+  deviceModel: string | null
+  screen: string | null
+  state: "active" | "background"
+  errors: number
+  lastError: string | null
+  lastSeen: string
+  lastAction: UltimaAccion | null
+}
+
+export type AccionEnVivo = UltimaAccion & {
+  id: string
+  screen: string | null
+  statusCode: number | null
+  time: number
+  cause: string | null
+}
+
+export type ChequeoSalud = { name: string; ok: boolean; ms: number; detail?: string }
+
+export type EstadoSistema = {
+  checkedAt: string | null
+  ageSeconds: number | null
+  stale: boolean
+  checks: ChequeoSalud[]
+}
+
+export type CausaServidor = {
+  receivedAt: string
+  status: number | null
+  method: string
+  route: string
+  errorName: string
+  errorCode: string | null
+  errorMessage: string
+  stack: string | null
+}
+
 export const NIVEL_LABELS: Record<Nivel, string> = {
   error: "Error",
   warn: "Advertencia",

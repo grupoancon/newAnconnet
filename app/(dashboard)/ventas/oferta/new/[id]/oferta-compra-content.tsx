@@ -2497,7 +2497,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
                     <>
                       <SelectField
                         label="¿Cómo nos contactó? *"
-                        placeholder="Seleccione como nos contacto"
+                        placeholder="Seleccione cómo nos contactó"
                         grupos={MEDIOS_CONTACTO_GRUPOS}
                         value={form.cli_contac}
                         onValueChange={(valor) => actualizarCampo("cli_contac", valor)}

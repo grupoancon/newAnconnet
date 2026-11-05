@@ -77,12 +77,47 @@ export type RepresentanteConvenio = {
   nombre: string
   cedula: string | null
   activo: boolean
+  // En qué documentos aparece en el selector de firma; null o [] = en todos.
+  documentos?: DocumentoFirma[] | null
   created_at: string
 }
 
-// GET /ventas/convenio-representantes/activos — para el selector del reporte del convenio.
-export function listarRepresentantesActivos() {
-  return ventasFetch<RepresentanteConvenio[]>("/convenio-representantes/activos")
+// Documentos impresos con selector de "Representante de la empresa". Mismo listado que
+// DOCUMENTOS_FIRMA en newApi (convenios/entities/representante-empresa.entity.ts).
+export const DOCUMENTOS_FIRMA = [
+  { valor: "convenio", etiqueta: "Convenio" },
+  { valor: "oferta", etiqueta: "Oferta de compra" },
+  { valor: "financiamiento", etiqueta: "Financiamiento" },
+  { valor: "refinanciamiento", etiqueta: "Refinanciamiento" },
+] as const
+
+export type DocumentoFirma = (typeof DOCUMENTOS_FIRMA)[number]["valor"]
+
+/** ¿Aparece este representante en el selector de firma de `documento`? Sin
+ * documentos marcados aparece en todos. Tolera la columna JSON llegando como texto. */
+export function representanteAplicaEn(
+  representante: Pick<RepresentanteConvenio, "documentos">,
+  documento: DocumentoFirma
+): boolean {
+  let documentos: unknown = representante.documentos
+  if (typeof documentos === "string") {
+    try {
+      documentos = JSON.parse(documentos)
+    } catch {
+      documentos = null
+    }
+  }
+  if (!Array.isArray(documentos) || documentos.length === 0) return true
+  return documentos.includes(documento)
+}
+
+// GET /ventas/convenio-representantes/activos — para el selector de firma de cada
+// documento impreso: solo los activos que aparecen en `documento`.
+export async function listarRepresentantesActivos(documento: DocumentoFirma) {
+  const lista = await ventasFetch<RepresentanteConvenio[]>(
+    "/convenio-representantes/activos"
+  )
+  return lista.filter((representante) => representanteAplicaEn(representante, documento))
 }
 
 // GET /ventas/convenio-representantes — todos, para la pantalla de administración.
@@ -94,6 +129,7 @@ export function crearRepresentanteConvenio(datos: {
   nombre: string
   cedula?: string
   activo?: boolean
+  documentos?: DocumentoFirma[] | null
 }) {
   return ventasFetch<RepresentanteConvenio>("/convenio-representantes", {
     method: "POST",
@@ -103,7 +139,12 @@ export function crearRepresentanteConvenio(datos: {
 
 export function actualizarRepresentanteConvenio(
   id: number,
-  datos: { nombre?: string; cedula?: string; activo?: boolean }
+  datos: {
+    nombre?: string
+    cedula?: string
+    activo?: boolean
+    documentos?: DocumentoFirma[] | null
+  }
 ) {
   return ventasFetch<RepresentanteConvenio>(`/convenio-representantes/${id}`, {
     method: "POST",

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Plus } from "lucide-react"
 
+import { MultiSelectField } from "@/components/shared/multi-select-field"
 import { SelectField } from "@/components/shared/select-field"
 import { TextField } from "@/components/shared/text-field"
 import { useToast } from "@/components/shared/toast-provider"
@@ -23,8 +24,19 @@ import {
   listarPromociones,
   type PromocionBackend,
 } from "@/lib/api/ventas-api"
+import { describirCondicionesPromocion } from "@/lib/promociones"
 
 const TIPOS_EFECTO = ["porcentaje", "monto_fijo"]
+
+// Mismas opciones que Configuración → Promociones ("Crédito BIESS (Sin Interés)"
+// solo existe en Refinanciamiento, que comparte este catálogo).
+const TIPOS_FINANCIAMIENTO_PROMOCION = [
+  "Crédito directo",
+  "Crédito BIESS",
+  "Contado",
+  "Mixto",
+  "Crédito BIESS (Sin Interés)",
+]
 
 // Panel de gestión de promociones — crear nuevas y togglear activo/fechas de las ya
 // existentes. Catálogo compartido con financiamiento-content.tsx (el mismo motor de
@@ -48,6 +60,10 @@ export function PromocionesSheet({
   const [valorEfecto, setValorEfecto] = useState("")
   const [fechaInicio, setFechaInicio] = useState("")
   const [fechaFin, setFechaFin] = useState("")
+  // Condiciones para aplicarla (vacío = sin restricción, ver lib/promociones.ts).
+  const [tiposFinanciamiento, setTiposFinanciamiento] = useState<string[]>([])
+  const [abonoInicialMinimo, setAbonoInicialMinimo] = useState("")
+  const [permiteRepartido, setPermiteRepartido] = useState(true)
   const [creando, setCreando] = useState(false)
 
   useEffect(() => {
@@ -96,12 +112,18 @@ export function PromocionesSheet({
         fechaInicio: fechaInicio || undefined,
         fechaFin: fechaFin || undefined,
         activo: true,
+        tiposFinanciamiento,
+        abonoInicialMinimo: Number(abonoInicialMinimo) || null,
+        permiteAbonoRepartido: permiteRepartido,
       })
       setPromociones((anterior) => [creada, ...anterior])
       setNombre("")
       setValorEfecto("")
       setFechaInicio("")
       setFechaFin("")
+      setTiposFinanciamiento([])
+      setAbonoInicialMinimo("")
+      setPermiteRepartido(true)
       toast({ variant: "success", description: "Promoción creada." })
       onCambio()
     } catch (err) {
@@ -121,7 +143,8 @@ export function PromocionesSheet({
         <SheetHeader className="border-border border-b p-5">
           <SheetTitle>Promociones</SheetTitle>
           <SheetDescription>
-            Activa o desactiva promociones, y define en qué rango de fechas aplican.
+            Activa o desactiva promociones, y define en qué fechas y con qué
+            condiciones aplican.
           </SheetDescription>
         </SheetHeader>
 
@@ -158,6 +181,36 @@ export function PromocionesSheet({
                 onChange={setFechaFin}
               />
             </div>
+            <div className="text-muted-foreground pt-1 text-xs font-semibold">
+              Condiciones (opcional, todas las que llenes se exigen a la vez)
+            </div>
+            <MultiSelectField
+              label="Solo para estos tipos de financiamiento"
+              placeholder="Cualquier tipo"
+              options={TIPOS_FINANCIAMIENTO_PROMOCION}
+              value={tiposFinanciamiento}
+              onChange={setTiposFinanciamiento}
+            />
+            <TextField
+              label="Abono inicial mínimo ($)"
+              type="number"
+              placeholder="Sin mínimo"
+              value={abonoInicialMinimo}
+              onChange={setAbonoInicialMinimo}
+            />
+            <label className="flex cursor-pointer items-start gap-2 text-sm">
+              <Checkbox
+                className="mt-0.5"
+                checked={permiteRepartido}
+                onCheckedChange={(v) => setPermiteRepartido(v === true)}
+              />
+              <span>
+                Aplica si el abono inicial se reparte en varias fechas
+                <span className="text-muted-foreground block text-xs">
+                  Desmárcalo si solo aplica con el abono inicial en una sola fecha.
+                </span>
+              </span>
+            </label>
             <Button
               size="sm"
               disabled={creando || !nombre || !valorEfecto}
@@ -191,6 +244,11 @@ export function PromocionesSheet({
                       {(promo.fecha_inicio || promo.fecha_fin) &&
                         ` · ${promo.fecha_inicio ?? "…"} a ${promo.fecha_fin ?? "…"}`}
                     </div>
+                    {describirCondicionesPromocion(promo) && (
+                      <div className="text-muted-foreground text-xs">
+                        {describirCondicionesPromocion(promo)}
+                      </div>
+                    )}
                   </div>
                   <Checkbox
                     checked={promo.activo}

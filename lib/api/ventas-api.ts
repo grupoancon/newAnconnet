@@ -1523,6 +1523,11 @@ export type PromocionBackend = {
   fecha_inicio: string | null
   fecha_fin: string | null
   activo: boolean
+  // Condiciones para poder aplicarla (null = sin restricción) — ver lib/promociones.ts.
+  tipos_financiamiento?: string[] | null
+  abono_inicial_minimo?: string | null
+  // false/0 = no aplica si el abono inicial se reparte en varias fechas.
+  permite_abono_repartido?: boolean | number | null
 }
 
 export type PromocionInput = {
@@ -1533,6 +1538,10 @@ export type PromocionInput = {
   fechaInicio?: string
   fechaFin?: string
   activo?: boolean
+  // Lista vacía / null = cualquier tipo; null o 0 = sin abono inicial mínimo.
+  tiposFinanciamiento?: string[] | null
+  abonoInicialMinimo?: number | null
+  permiteAbonoRepartido?: boolean
 }
 
 // GET /ventas/promociones — todas (para la pantalla de gestión).

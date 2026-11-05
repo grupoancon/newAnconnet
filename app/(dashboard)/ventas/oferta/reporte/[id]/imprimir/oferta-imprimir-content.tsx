@@ -120,8 +120,8 @@ export function OfertaImprimirContent({ id }: { id: string }) {
   const [agregandoTipo, setAgregandoTipo] = useState(false)
 
   // Fondo de hoja membretada para la impresión (public/images/membrete-oferta.png).
-  // Se puede desactivar si se va a imprimir sobre papel ya membretado.
-  const [conMembrete, setConMembrete] = useState(true)
+  // Desactivado por defecto; se activa para imprimir sobre papel en blanco.
+  const [conMembrete, setConMembrete] = useState(false)
 
   // Firmas — el cliente y el asesor son fijos (vienen del proceso/oferta); el
   // representante de la empresa se elige de una lista (la misma que el
@@ -172,7 +172,7 @@ export function OfertaImprimirContent({ id }: { id: string }) {
           obtenerDatosFinancieros(idNumero),
           obtenerFinanciamiento(idNumero),
           listarClientesExtra(idNumero),
-          listarRepresentantesActivos(),
+          listarRepresentantesActivos("oferta"),
           listarTiposInmueble(),
         ])
         if (cancelado) return
@@ -529,14 +529,14 @@ export function OfertaImprimirContent({ id }: { id: string }) {
                 </div>
               </div>
 
-              <SeccionTitulo texto="DATOS INMUEBLE" />
+              <SeccionTitulo texto="DATOS DEL INMUEBLE" />
               <table className="mb-3 w-full border-collapse text-xs">
                 <thead>
                   <tr>
                     <Th>PROYECTO</Th>
-                    <Th>NUMERO INMUEBLE</Th>
-                    <Th>AREA M2</Th>
-                    <Th>VALOR INMUEBLE</Th>
+                    <Th>NÚMERO DE INMUEBLE</Th>
+                    <Th>ÁREA (M²)</Th>
+                    <Th>VALOR DEL INMUEBLE</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -582,7 +582,7 @@ export function OfertaImprimirContent({ id }: { id: string }) {
                 <Campo label="Sexo" valor={titular?.sexo} />
               </Fila3>
               <Fila3>
-                <Campo label="C.I o Pasaporte" valor={titular?.identificacion} />
+                <Campo label="C.I. o Pasaporte" valor={titular?.identificacion} />
                 <Campo
                   label="Fecha de Nac."
                   valor={titular?.fecha_nacimiento?.slice(0, 10)}
@@ -591,7 +591,7 @@ export function OfertaImprimirContent({ id }: { id: string }) {
               </Fila3>
               <Fila3>
                 <Campo label="Estado civil" valor={titular?.estado_civil} />
-                <Campo label="Pais" valor={oferta.cli_pais} />
+                <Campo label="País" valor={oferta.cli_pais} />
                 <Campo label="Provincia/Estado" valor={oferta.cli_provin} />
               </Fila3>
               <Fila3>
@@ -653,26 +653,26 @@ export function OfertaImprimirContent({ id }: { id: string }) {
               <div className="mb-1.5 grid grid-cols-2 gap-x-4 text-xs">
                 <div className="flex flex-col gap-y-1">
                   <Campo label="1) Referencia Familiar" valor={oferta.cli_reFami1} />
-                  <Campo label="Parentezco" valor={oferta.cli_paren1} />
+                  <Campo label="Parentesco" valor={oferta.cli_paren1} />
                   <Campo label="Telf. Celular" valor={tel(oferta.cli_telParen1)} />
                 </div>
                 <div className="flex flex-col gap-y-1">
                   <Campo label="2) Referencia Familiar" valor={oferta.cli_reFami2} />
-                  <Campo label="Parentezco" valor={oferta.cli_paren2} />
+                  <Campo label="Parentesco" valor={oferta.cli_paren2} />
                   <Campo label="Telf. Celular" valor={tel(oferta.cli_telParen2)} />
                 </div>
               </div>
 
               {tieneApoderado && (
                 <>
-                  <SeccionTitulo texto="DATOS APODERADO" />
+                  <SeccionTitulo texto="DATOS DEL APODERADO" />
                   <Fila3>
                     <Campo
                       label="Apellidos y Nombres"
                       valor={oferta.cli_representante}
                       ancho={2}
                     />
-                    <Campo label="C.I o Pasaporte" valor={oferta.cli_representanteID} />
+                    <Campo label="C.I. o Pasaporte" valor={oferta.cli_representanteID} />
                   </Fila3>
                   <Fila3>
                     <Campo label="Telf. Celular" valor={tel(oferta.cli_telefR)} />
@@ -698,7 +698,7 @@ export function OfertaImprimirContent({ id }: { id: string }) {
                     />
                   </FilaLibre>
                   <Fila3>
-                    <Campo label="C.I o Pasaporte" valor={oferta.cli_conyuID} />
+                    <Campo label="C.I. o Pasaporte" valor={oferta.cli_conyuID} />
                     <Campo label="Telf. Celular" valor={tel(oferta.cli_conyuCell)} />
                   </Fila3>
                   <Fila3>
@@ -718,29 +718,33 @@ export function OfertaImprimirContent({ id }: { id: string }) {
                 </div>
               )}
 
-              <SeccionTitulo texto="DATOS REFERIDOS" />
+              <SeccionTitulo texto="DATOS DEL REFERIDO" />
               <Fila3>
                 <Campo label="Apellidos y Nombres" valor={oferta.referido_nombre} />
                 <Campo label="Telf. Celular" valor={tel(oferta.referido_telefono)} />
                 <Campo label="Relación" valor={oferta.referido_relacion} />
               </Fila3>
 
-              <SeccionTitulo texto="DATOS ASESOR INMOBILIARIO" />
+              <SeccionTitulo texto="DATOS DEL ASESOR INMOBILIARIO" />
               <Fila3>
                 <Campo
                   label="Asesor Final (Cierre de Venta)"
                   valor={proceso?.cli_asesor}
                 />
                 <Campo label="Telf. Celular" valor={tel(oferta.cli_asesorTelf)} />
+                <Campo
+                  label="Tipo de Financiamiento"
+                  valor={financiamiento?.financ_type}
+                />
               </Fila3>
               <Fila3>
-                <Campo label="Como nos contacto" valor={oferta.cli_contac} />
+                <Campo label="¿Cómo nos contactó?" valor={oferta.cli_contac} />
                 <Campo label="Nombre de contacto" valor={oferta.cli_contacNombre} />
               </Fila3>
               <Fila3>
-                <Campo label="Pospectador" valor={oferta.prospectador} />
+                <Campo label="Prospectador" valor={oferta.prospectador} />
                 <Campo
-                  label="Asistencia en proyecto"
+                  label="Asistencia en el proyecto"
                   valor={oferta.cli_asistenciaProyecto}
                 />
                 <Campo label="Visitó el proyecto" valor={oferta.cli_visitaProyecto} />
@@ -756,7 +760,7 @@ export function OfertaImprimirContent({ id }: { id: string }) {
               )}
               <FilaLibre>
                 <Campo
-                  label="¿Qué le motivo la compra?"
+                  label="¿Qué le motivó la compra?"
                   valor={oferta.cli_motivoCompra}
                   ancho={3}
                 />
@@ -803,8 +807,8 @@ export function OfertaImprimirContent({ id }: { id: string }) {
                 Con el valor que usted entrega a la firma de este instrumento, ha
                 reservado su inmueble. En caso de que usted desista de la compra, perderá
                 este primer abono, a menos que a la firma de este documento usted no
-                conozca el bien, lo que podrá realizarlo en los próximos tres dias;
-                nuestros asesores estaran gustosos de atenderle.
+                conozca el bien, lo que podrá realizarlo en los próximos tres días;
+                nuestros asesores estarán gustosos de atenderle.
               </div>
 
               <div className="mb-8 text-[10px]">
@@ -925,7 +929,7 @@ function Hoja({
   children: React.ReactNode
 }) {
   return (
-    <div className={`hoja${ultima ? "hoja-ultima" : ""}`}>
+    <div className={`hoja${ultima ? " hoja-ultima" : ""}`}>
       {conMembrete && <div className="hoja-membrete" aria-hidden />}
       <div className="hoja-contenido">{children}</div>
     </div>
@@ -950,12 +954,12 @@ function DatosLaboralesCliente({ oferta }: { oferta: OfertaBackend }) {
         <>
           <Fila3>
             <Campo label="Empresa donde Trabaja" valor={oferta.cli_trabEmpresa} />
-            <Campo label="Cargo Trabajo" valor={oferta.cli_trabCargo} />
-            <Campo label="Ciudad" valor={oferta.cli_trabTiempo} />
+            <Campo label="Cargo" valor={oferta.cli_trabCargo} />
+            <Campo label="Antigüedad (años)" valor={oferta.cli_trabTiempo} />
           </Fila3>
           <Fila3>
             <Campo label="Sector" valor={oferta.cli_trabSector} />
-            <Campo label="Dirección Trabajo" valor={oferta.cli_trabDireccion} ancho={2} />
+            <Campo label="Dirección del Trabajo" valor={oferta.cli_trabDireccion} ancho={2} />
           </Fila3>
           <Fila3>
             <Campo label="Telf. Trabajo" valor={tel(oferta.cli_trabTelefono)} />

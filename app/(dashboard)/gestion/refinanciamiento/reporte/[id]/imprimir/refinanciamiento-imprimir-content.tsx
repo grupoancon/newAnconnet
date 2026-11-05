@@ -130,7 +130,7 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
             : Promise.resolve(null),
           obtenerOferta(refinanciamientoData.id_process),
           listarClientesExtra(refinanciamientoData.id_process),
-          listarRepresentantesActivos(),
+          listarRepresentantesActivos("refinanciamiento"),
         ])
         if (cancelado) return
         setLoteInfo(lote)

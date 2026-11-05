@@ -21,22 +21,48 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import {
+  DOCUMENTOS_FIRMA,
   actualizarRepresentanteConvenio,
   crearRepresentanteConvenio,
   eliminarRepresentanteConvenio,
   listarRepresentantesConvenio,
+  representanteAplicaEn,
+  type DocumentoFirma,
   type RepresentanteConvenio,
 } from "@/lib/api/convenios-api"
 import { VentasApiError } from "@/lib/api/ventas-api"
 import { cn } from "@/lib/utils"
 
-type Edicion = { id: number | null; nombre: string; cedula: string; activo: boolean }
+type Edicion = {
+  id: number | null
+  nombre: string
+  cedula: string
+  activo: boolean
+  // Documentos en los que aparece; vacío = en todos.
+  documentos: DocumentoFirma[]
+}
 
-const NUEVO: Edicion = { id: null, nombre: "", cedula: "", activo: true }
+const NUEVO: Edicion = { id: null, nombre: "", cedula: "", activo: true, documentos: [] }
 
-// Administra la lista de personas que firman por la empresa en los convenios. No son
-// usuarios del sistema: solo un nombre (que se imprime y se compara en
-// {{#if (eq representante "Nombre")}}), su cédula (se imprime en la firma) y si está activo.
+// Documentos marcados de un representante (vacío si aparece en todos).
+function documentosDe(rep: RepresentanteConvenio): DocumentoFirma[] {
+  const todos = DOCUMENTOS_FIRMA.map((d) => d.valor)
+  const marcados = todos.filter((d) => representanteAplicaEn(rep, d))
+  return marcados.length === todos.length ? [] : marcados
+}
+
+function describirDocumentos(rep: RepresentanteConvenio): string {
+  const marcados = documentosDe(rep)
+  if (marcados.length === 0) return "Todos"
+  return DOCUMENTOS_FIRMA.filter((d) => marcados.includes(d.valor))
+    .map((d) => d.etiqueta)
+    .join(", ")
+}
+
+// Administra la lista de personas que firman por la empresa (convenio, oferta,
+// financiamiento y refinanciamiento). No son usuarios del sistema: solo un nombre (que
+// se imprime y se compara en {{#if (eq representante "Nombre")}}), su cédula (se
+// imprime en la firma), si está activo y en qué documentos aparece.
 export function RepresentantesContent() {
   const toast = useToast()
   const [lista, setLista] = useState<RepresentanteConvenio[] | null>(null)
@@ -76,7 +102,17 @@ export function RepresentantesContent() {
     }
     setGuardando(true)
     try {
-      const datos = { nombre, cedula: edicion.cedula.trim(), activo: edicion.activo }
+      const datos = {
+        nombre,
+        cedula: edicion.cedula.trim(),
+        activo: edicion.activo,
+        // Todos marcados = igual que ninguno: aparece en todos (se guarda null).
+        documentos:
+          edicion.documentos.length === 0 ||
+          edicion.documentos.length === DOCUMENTOS_FIRMA.length
+            ? null
+            : edicion.documentos,
+      }
       if (edicion.id == null) await crearRepresentanteConvenio(datos)
       else await actualizarRepresentanteConvenio(edicion.id, datos)
       toast({ variant: "success", description: "Representante guardado." })
@@ -136,8 +172,10 @@ export function RepresentantesContent() {
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6.5">
         <p className="text-muted-foreground mb-3.5 text-xs">
-          Personas que pueden firmar por la empresa en un convenio. No son usuarios del
-          sistema. En el contenido del convenio, usa el nombre exacto con{" "}
+          Personas que pueden firmar por la empresa en el convenio, la oferta de compra,
+          el financiamiento y el refinanciamiento. No son usuarios del sistema. En
+          &ldquo;Aparece en&rdquo; eliges en cuáles de esos documentos se puede elegir a cada
+          uno. En el contenido del convenio, usa el nombre exacto con{" "}
           <code>{'{{#if (eq representante "Nombre Apellido")}}'}</code>.
         </p>
 
@@ -175,6 +213,7 @@ export function RepresentantesContent() {
                   <tr className="bg-muted/60 text-muted-foreground text-[10.5px] font-bold tracking-wide">
                     <th className="px-4.5 py-2.75 text-left">Nombre</th>
                     <th className="px-4.5 py-2.75 text-left">Cédula</th>
+                    <th className="px-4.5 py-2.75 text-left">Aparece en</th>
                     <th className="px-4.5 py-2.75 text-center">Activo</th>
                     <th className="px-2 py-2.75" />
                   </tr>
@@ -190,6 +229,12 @@ export function RepresentantesContent() {
                       </td>
                       <td data-label="Cédula" className="text-muted-foreground px-4.5 py-2.5">
                         {rep.cedula || "—"}
+                      </td>
+                      <td
+                        data-label="Aparece en"
+                        className="text-muted-foreground px-4.5 py-2.5"
+                      >
+                        {describirDocumentos(rep)}
                       </td>
                       <td data-label="Activo" className="px-4.5 py-2.5 text-center">
                         {rep.activo ? (
@@ -211,6 +256,7 @@ export function RepresentantesContent() {
                                 nombre: rep.nombre,
                                 cedula: rep.cedula ?? "",
                                 activo: rep.activo,
+                                documentos: documentosDe(rep),
                               })
                             }
                           >
@@ -243,7 +289,8 @@ export function RepresentantesContent() {
               {edicion?.id == null ? "Nuevo representante" : "Editar representante"}
             </SheetTitle>
             <SheetDescription>
-              El nombre y la cédula se imprimen en el bloque de firmas del convenio.
+              El nombre y la cédula se imprimen en el bloque de firmas de los documentos
+              en los que aparece.
             </SheetDescription>
           </SheetHeader>
           {edicion ? (
@@ -266,8 +313,35 @@ export function RepresentantesContent() {
                     setEdicion({ ...edicion, activo: valor === true })
                   }
                 />
-                Activo (aparece en el selector del convenio)
+                Activo (aparece en los selectores de firma)
               </label>
+              <div className="border-border space-y-2 border-t pt-3.5">
+                <div className="text-sm font-semibold">Aparece en</div>
+                <p className="text-muted-foreground text-xs">
+                  Marca solo los documentos en los que puede firmar. Si no marcas
+                  ninguno, aparece en todos.
+                </p>
+                {DOCUMENTOS_FIRMA.map((documento) => (
+                  <label
+                    key={documento.valor}
+                    className="flex cursor-pointer items-center gap-2 text-sm"
+                  >
+                    <Checkbox
+                      checked={edicion.documentos.includes(documento.valor)}
+                      onCheckedChange={(valor) =>
+                        setEdicion({
+                          ...edicion,
+                          documentos:
+                            valor === true
+                              ? [...edicion.documentos, documento.valor]
+                              : edicion.documentos.filter((d) => d !== documento.valor),
+                        })
+                      }
+                    />
+                    {documento.etiqueta}
+                  </label>
+                ))}
+              </div>
             </div>
           ) : null}
           <SheetFooter className="border-border border-t p-5">

@@ -218,7 +218,7 @@ export function ConvenioReporteContent({ id }: { id: string }) {
         const [procesoData, variables, reps, ofertaData, extras] = await Promise.all([
           obtenerProceso(idNumero),
           obtenerVariablesSeleccionDeProceso(idNumero),
-          listarRepresentantesActivos(),
+          listarRepresentantesActivos("convenio"),
           obtenerOferta(idNumero).catch(() => null),
           listarClientesExtra(idNumero).catch(() => []),
         ])
