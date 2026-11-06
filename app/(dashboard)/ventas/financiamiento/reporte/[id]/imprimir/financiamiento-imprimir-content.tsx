@@ -153,6 +153,9 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
   const valorLoteNumero =
     typeof valorLote === "string" ? parseFloat(valorLote) : (valorLote ?? 0)
   const entradas = financiamiento?.entradas ?? []
+  // La columna de observaciones (lo que el asesor escribe al lado de cada fila en el
+  // wizard) solo se muestra si alguna fila la tiene, para no dejar una columna vacía.
+  const hayObservacionesEntrada = entradas.some((fila) => fila.observaciones?.trim())
   const cronograma = financiamiento?.detalle ?? []
   const comentarios = (financiamiento?.comentarios ?? []).filter(
     (c) => c && c.trim().length > 0
@@ -468,10 +471,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                 {titular?.nombre ?? "—"}
               </div>
               <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
-                <Campo
-                  label="FECHA"
-                  valor={formatearFecha(financiamiento.created_at)}
-                />
+                <Campo label="FECHA" valor={formatearFecha(financiamiento.created_at)} />
                 <Campo
                   label="TIPO DE FINANCIAMIENTO"
                   valor={financiamiento.financ_type ?? "—"}
@@ -523,6 +523,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                   ))}
                   <Th ancho="14%">Escritura</Th>
                   <Th ancho="14%">Total a Cancelar</Th>
+                  {hayObservacionesEntrada && <Th>Observaciones</Th>}
                 </tr>
               </thead>
               <tbody>
@@ -548,6 +549,9 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                       {fila.escritura ? formatearNumero(fila.escritura) : "-"}
                     </Td>
                     <Td alinear="right">{formatearNumero(fila.total_cancelar)}</Td>
+                    {hayObservacionesEntrada && (
+                      <Td>{fila.observaciones?.trim() || "-"}</Td>
+                    )}
                   </tr>
                 ))}
                 <tr className="font-bold">
@@ -562,6 +566,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                   ))}
                   <Td alinear="right">{formatearNumero(totalesEntrada.escritura)}</Td>
                   <Td alinear="right">{formatearNumero(totalesEntrada.total)}</Td>
+                  {hayObservacionesEntrada && <Td />}
                 </tr>
               </tbody>
             </table>

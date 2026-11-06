@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/lib/navigation"
-import { ArrowLeft, CheckCircle2, Pencil, Printer } from "lucide-react"
+import { ArrowLeft, CheckCircle2, FileSpreadsheet, Pencil, Printer } from "lucide-react"
 
 import { Can, useCan } from "@/components/shared/can"
 import { DashboardTopbar } from "@/components/shared/dashboard-topbar"
@@ -35,6 +35,7 @@ import {
   type FinanciamientoBackend,
   type ProcesoBackend,
 } from "@/lib/api/ventas-api"
+import { descargarFinanciamientoExcel } from "@/lib/financiamiento-excel"
 import { cn } from "@/lib/utils"
 
 function formatearMoneda(valor: string | number | null | undefined): string {
@@ -85,6 +86,7 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
   const [confirmacionAbierta, setConfirmacionAbierta] = useState(false)
   const [aprobando, setAprobando] = useState(false)
   const puedeAprobar = useCan("financiamiento:aprobar")
+  const [exportando, setExportando] = useState(false)
 
   useEffect(() => {
     if (!idNumero || Number.isNaN(idNumero)) {
@@ -163,6 +165,23 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
     }
   }
 
+  // Solo se ofrece con el financiamiento aprobado (ver el botón más abajo).
+  async function manejarExportarExcel() {
+    if (!financiamiento) return
+    setExportando(true)
+    try {
+      await descargarFinanciamientoExcel({ financiamiento, proceso, loteInfo })
+    } catch {
+      toast({
+        variant: "error",
+        title: "No se pudo generar el Excel",
+        description: "Intenta de nuevo.",
+      })
+    } finally {
+      setExportando(false)
+    }
+  }
+
   const titular = proceso?.titular ?? null
   const estado = normalizarEstado(proceso?.finan_status)
 
@@ -186,6 +205,9 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
     descuentoTipo + (Number(financiamiento?.extra_discount) || 0)
 
   const entradas = financiamiento?.entradas ?? []
+  // La columna de observaciones (lo que el asesor escribe al lado de cada fila en el
+  // wizard) solo se muestra si alguna fila la tiene, para no dejar una columna vacía.
+  const hayObservacionesEntrada = entradas.some((fila) => fila.observaciones?.trim())
   const cronograma = financiamiento?.detalle ?? []
   const comentarios = (financiamiento?.comentarios ?? []).filter(
     (c) => c && c.trim().length > 0
@@ -382,6 +404,9 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                           ))}
                           <th className="px-4.5 py-2.5 text-right">Escritura</th>
                           <th className="px-4.5 py-2.5 text-right">Total a cancelar</th>
+                          {hayObservacionesEntrada && (
+                            <th className="px-4.5 py-2.5 text-left">Observaciones</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="font-mono text-[12.5px]">
@@ -423,6 +448,11 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                             <td className="px-4.5 py-1.75 text-right font-bold">
                               {formatearMoneda(fila.total_cancelar)}
                             </td>
+                            {hayObservacionesEntrada && (
+                              <td className="text-muted-foreground px-4.5 py-1.75 font-sans whitespace-pre-wrap">
+                                {fila.observaciones?.trim() || "—"}
+                              </td>
+                            )}
                           </tr>
                         ))}
                         <tr className="bg-muted/60">
@@ -449,6 +479,7 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                           <td className="text-accent-foreground px-4.5 py-2.5 text-right font-extrabold">
                             {formatearMoneda(totalesEntrada.total)}
                           </td>
+                          {hayObservacionesEntrada && <td />}
                         </tr>
                       </tbody>
                     </table>
@@ -481,7 +512,9 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                                 </th>
                                 <th className="px-4.5 py-2.75 text-right">Capital</th>
                                 <th className="px-4.5 py-2.75 text-right">Interés</th>
-                                <th className="px-4.5 py-2.75 text-right">Abono al lote</th>
+                                <th className="px-4.5 py-2.75 text-right">
+                                  Abono al lote
+                                </th>
                                 {columnasAlicuotaCronograma.map((nombre, indice) => (
                                   <th key={indice} className="px-4.5 py-2.75 text-right">
                                     {nombre}
@@ -653,6 +686,16 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                         )}
                       </>
                     )}
+                    {estado === "aprobado" && (
+                      <Button
+                        variant="outline"
+                        disabled={exportando}
+                        onClick={manejarExportarExcel}
+                      >
+                        <FileSpreadsheet className="size-3.5" strokeWidth={1.8} />
+                        {exportando ? "Exportando…" : "Exportar a Excel"}
+                      </Button>
+                    )}
                     {estado === "aprobado" && puedeAprobar && (
                       <Button
                         onClick={() =>
@@ -681,8 +724,8 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
           <SheetHeader className="border-border border-b p-5">
             <SheetTitle>Aprobar financiamiento</SheetTitle>
             <SheetDescription>
-              ¿Estás seguro de que quieres aprobar este financiamiento? Una vez
-              aprobado, quedará habilitado para imprimir el anexo.
+              ¿Estás seguro de que quieres aprobar este financiamiento? Una vez aprobado,
+              quedará habilitado para imprimir el anexo.
             </SheetDescription>
           </SheetHeader>
 
