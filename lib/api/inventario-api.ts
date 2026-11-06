@@ -73,8 +73,7 @@ async function inventarioFetch<T>(path: string, options: RequestInit = {}): Prom
 // "Facturado" no está acá: no se elige a mano, se deriva de numFac+anioFac (ver
 // esLoteFacturado en inventario-content.tsx). Vendido/Bloqueado/Inactivo se sacaron del
 // selector de "Cambiar estado" — el conjunto real que se usa es Libre/Reservado/
-// Convenio/Hipotecado; eliminarLote() sigue mandando "INACTIVO" directo al backend, no
-// depende de esta lista.
+// Convenio/Hipotecado. Los lotes no se eliminan desde la app.
 export const ESTADOS_LOTE = [
   { value: "LIBRE", label: "Libre" },
   { value: "RESERVADO", label: "Reservado" },
@@ -228,13 +227,14 @@ export function importarLotes(
   })
 }
 
-// PATCH /inventarios/:codigo — actualiza los datos de un lote existente (no toca el
-// estado; para eso ver cambiarEstadoLote, que usa un endpoint aparte).
+// PATCH /inventarios/:id — actualiza los datos de un lote existente (no toca el
+// estado; para eso ver cambiarEstadoLote, que usa un endpoint aparte). Va por el id
+// numérico del lote: el backend hace +id, y con el código llegaba NaN a la consulta.
 export function actualizarLote(
-  codigo: string,
+  id: number,
   data: Partial<Omit<LoteInventarioInput, "codigo" | "estado">>
 ) {
-  return inventarioFetch<LoteInventario>(`/${encodeURIComponent(codigo)}`, {
+  return inventarioFetch<LoteInventario>(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   })
@@ -250,17 +250,6 @@ export function cambiarEstadoLote(id: number, estado: EstadoLote, motivo?: strin
   return inventarioFetch<LoteInventario>(`/${id}/estado`, {
     method: "PATCH",
     body: JSON.stringify({ estado: estado.toLowerCase(), motivo }),
-  })
-}
-
-// DELETE /inventarios/:codigo — "eliminar" desde la UI, pero el backend NUNCA borra la
-// fila: internamente equivale a cambiarEstadoLote(id, "INACTIVO") + registro en la
-// bitacora. Se expone como DELETE (verbo REST correcto desde la perspectiva del cliente)
-// aunque la implementacion real sea un UPDATE.
-export function eliminarLote(codigo: string, motivo?: string) {
-  return inventarioFetch<{ success: boolean }>(`/${encodeURIComponent(codigo)}`, {
-    method: "DELETE",
-    body: JSON.stringify({ motivo }),
   })
 }
 

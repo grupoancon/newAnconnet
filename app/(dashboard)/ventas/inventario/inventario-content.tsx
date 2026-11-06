@@ -13,7 +13,6 @@ import {
   Plus,
   RefreshCcw,
   ShoppingBag,
-  Trash2,
 } from "lucide-react"
 
 import { Can } from "@/components/shared/can"
@@ -26,7 +25,6 @@ import { PillTabs } from "@/components/shared/pill-tabs"
 import { RowActionButton, RowActions } from "@/components/shared/row-actions"
 import { Spinner } from "@/components/shared/spinner"
 import { StatusBadge, type StatusVariant } from "@/components/shared/status-badge"
-import { useToast } from "@/components/shared/toast-provider"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -37,7 +35,6 @@ import {
 } from "@/components/ui/select"
 import {
   InventarioApiError,
-  eliminarLote,
   listarInventario,
   listarProyectos,
   type LoteInventario,
@@ -145,7 +142,6 @@ function normalizarEstadoProyecto(crudo: string | null | undefined): {
 
 export function InventarioContent() {
   const router = useRouter()
-  const toast = useToast()
   const [vista, setVista] = useState<"lotes" | "proyectos">("lotes")
   const [lotes, setLotes] = useState<LoteInventario[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -155,7 +151,6 @@ export function InventarioContent() {
   const [loteEnEdicion, setLoteEnEdicion] = useState<LoteInventario | null>(null)
   const [formularioAbierto, setFormularioAbierto] = useState(false)
   const [loteEstado, setLoteEstado] = useState<LoteInventario | null>(null)
-  const [codigosEnAccion, setCodigosEnAccion] = useState<Set<string>>(new Set())
 
   const [proyectos, setProyectos] = useState<ProyectoInventario[] | null>(null)
   const [errorProyectos, setErrorProyectos] = useState<string | null>(null)
@@ -227,15 +222,6 @@ export function InventarioContent() {
     setPaginaProyectos(1)
   }
 
-  function marcarEnAccion(codigo: string, activo: boolean) {
-    setCodigosEnAccion((actual) => {
-      const siguiente = new Set(actual)
-      if (activo) siguiente.add(codigo)
-      else siguiente.delete(codigo)
-      return siguiente
-    })
-  }
-
   function actualizarEnLista(loteActualizado: LoteInventario) {
     setLotes((actual) =>
       actual
@@ -253,34 +239,6 @@ export function InventarioContent() {
           )
         : actual
     )
-  }
-
-  async function eliminar(lote: LoteInventario) {
-    if (
-      !window.confirm(
-        `¿Eliminar el lote ${lote.codigo}? Queda como inactivo, no se borra del historial.`
-      )
-    ) {
-      return
-    }
-    marcarEnAccion(lote.codigo, true)
-    try {
-      await eliminarLote(lote.codigo)
-      cargarInventario()
-      toast({
-        variant: "success",
-        description: `Lote ${lote.codigo} marcado como inactivo.`,
-      })
-    } catch (err) {
-      toast({
-        variant: "error",
-        title: "No se pudo eliminar",
-        description:
-          err instanceof InventarioApiError ? err.message : "Intenta de nuevo.",
-      })
-    } finally {
-      marcarEnAccion(lote.codigo, false)
-    }
   }
 
   function manejarBusqueda(valor: string) {
@@ -366,14 +324,6 @@ export function InventarioContent() {
             icon={<CheckCircle2 className="size-3.5" strokeWidth={1.8} />}
             label="Cambiar estado"
             onClick={() => setLoteEstado(lote)}
-          />
-        </Can>
-        <Can permiso="inventario:eliminar">
-          <RowActionButton
-            variant="danger"
-            icon={<Trash2 className="size-3.5" strokeWidth={1.8} />}
-            label="Eliminar lote"
-            onClick={() => void eliminar(lote)}
           />
         </Can>
       </RowActions>
@@ -610,7 +560,6 @@ export function InventarioContent() {
                   {/* Mobile: una tarjeta por lote (la tabla de 6 columnas no entra). */}
                   <div className="flex flex-col md:hidden">
                     {lotesPagina.map((lote, index) => {
-                      const enAccion = codigosEnAccion.has(lote.codigo)
                       const estado = normalizarEstado(lote)
 
                       return (
@@ -618,8 +567,7 @@ export function InventarioContent() {
                           key={lote.id}
                           className={cn(
                             "flex flex-col gap-2 px-4 py-3.5 text-[13px]",
-                            index < lotesPagina.length - 1 && "border-border border-b",
-                            enAccion && "opacity-60"
+                            index < lotesPagina.length - 1 && "border-border border-b"
                           )}
                         >
                           <div className="flex items-center justify-between gap-3">
@@ -663,7 +611,6 @@ export function InventarioContent() {
                       <span className="text-right">ACCIONES</span>
                     </div>
                     {lotesPagina.map((lote, index) => {
-                      const enAccion = codigosEnAccion.has(lote.codigo)
                       const estado = normalizarEstado(lote)
 
                       return (
@@ -671,8 +618,7 @@ export function InventarioContent() {
                           key={lote.id}
                           className={cn(
                             "hover:bg-muted/60 grid min-w-[820px] grid-cols-[1fr_1.4fr_1fr_1fr_1fr_140px] items-center px-6.5 py-3.5 text-[13px] transition-colors",
-                            index < lotesPagina.length - 1 && "border-border border-b",
-                            enAccion && "opacity-60"
+                            index < lotesPagina.length - 1 && "border-border border-b"
                           )}
                         >
                           <span className="font-mono font-bold">{lote.codigo}</span>

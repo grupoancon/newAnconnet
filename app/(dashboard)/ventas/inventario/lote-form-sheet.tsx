@@ -112,7 +112,7 @@ export function LoteFormSheet({
     startSaving(async () => {
       try {
         if (esEdicion && lote) {
-          const loteActualizado = await actualizarLote(lote.codigo, {
+          const loteActualizado = await actualizarLote(lote.id, {
             id_proyecto: idProyectoNumero,
             numFac: numFac.trim(),
             anioFac: anioFac.trim(),
