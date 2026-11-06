@@ -11,7 +11,9 @@ import { OpcionRevision } from "@/components/shared/opcion-revision"
 import { PageHeader } from "@/components/shared/page-header"
 import { Spinner } from "@/components/shared/spinner"
 import { TextField } from "@/components/shared/text-field"
-import { StatusBadge, type StatusVariant } from "@/components/shared/status-badge"
+import { StatusBadge } from "@/components/shared/status-badge"
+
+import { estadoPreEntrega } from "../../detalle-comun"
 import { useToast } from "@/components/shared/toast-provider"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -25,18 +27,11 @@ import {
   obtenerEntrega,
   type ChecklistPreEntrega,
   type EntregaDetalle,
-  type EstadoPaso,
   type ItemPreEntrega,
   type RevisionOfrecimiento,
 } from "@/lib/api/entregas-api"
 
 type Respuestas = Record<ItemPreEntrega, RevisionOfrecimiento | null>
-
-const ESTADO_VARIANTE: Record<EstadoPaso, { variant: StatusVariant; label: string }> = {
-  COMPLETO: { variant: "aprobado", label: "Completo" },
-  PENDIENTE: { variant: "pronto", label: "Pendiente" },
-  OBSERVACION: { variant: "rechazado", label: "Observación" },
-}
 
 function formatearFecha(valor: string | null, hora?: string | null): string {
   if (!valor) return "Sin fecha"
@@ -161,7 +156,13 @@ export function PreEntregaContent({ id }: { id: number }) {
         })
         toast({
           variant: "success",
-          description: `Pre-entrega registrada (${ESTADO_VARIANTE[estado].label.toLowerCase()}).`,
+          title: "Pre-entrega guardada",
+          description:
+            estado === "PENDIENTE"
+              ? "Se guardó correctamente. Quedan puntos en PD por completar; el asesor ya puede registrar la entrega."
+              : estado === "OBSERVACION"
+                ? "Se guardó correctamente con observaciones. El asesor ya puede registrar la entrega."
+                : "Se guardó correctamente. El asesor ya puede registrar la entrega.",
         })
         router.push("/entregas")
       } catch (err) {
@@ -390,9 +391,19 @@ export function PreEntregaContent({ id }: { id: number }) {
                 <div className="mb-4 flex items-center justify-between gap-2">
                   <h2 className="text-[15px] font-extrabold">Información del proceso</h2>
                   <StatusBadge
-                    variant={ESTADO_VARIANTE[detalle.preEntrega.estado].variant}
+                    variant={
+                      estadoPreEntrega(
+                        detalle.preEntrega.estado,
+                        Boolean(detalle.preEntrega.items)
+                      ).variant
+                    }
                   >
-                    {ESTADO_VARIANTE[detalle.preEntrega.estado].label}
+                    {
+                      estadoPreEntrega(
+                        detalle.preEntrega.estado,
+                        Boolean(detalle.preEntrega.items)
+                      ).label
+                    }
                   </StatusBadge>
                 </div>
                 <dl className="space-y-3.5">

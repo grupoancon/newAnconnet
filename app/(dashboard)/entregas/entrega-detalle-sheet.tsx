@@ -31,6 +31,7 @@ import {
   Dato,
   ESTADO_VARIANTE,
   Seccion,
+  estadoPreEntrega,
   SinRegistrar,
   formatearFecha,
 } from "./detalle-comun"
@@ -226,8 +227,10 @@ export function EntregaDetalleSheet({
               <Seccion
                 titulo="Pre-entrega"
                 estado={
-                  <StatusBadge variant={ESTADO_VARIANTE[pre.estado].variant}>
-                    {ESTADO_VARIANTE[pre.estado].label}
+                  <StatusBadge
+                    variant={estadoPreEntrega(pre.estado, preRegistrada).variant}
+                  >
+                    {estadoPreEntrega(pre.estado, preRegistrada).label}
                   </StatusBadge>
                 }
                 acciones={

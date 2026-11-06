@@ -15,6 +15,18 @@ export const ESTADO_VARIANTE: Record<
   OBSERVACION: { variant: "rechazado", label: "Observación" },
 }
 
+// Pre-entrega guardada pero con algun punto en PD: el paso sigue "pendiente", pero se
+// muestra en verde como "Guardada · PD" para que quede claro que si se registro.
+export function estadoPreEntrega(
+  estado: EstadoPaso,
+  registrada: boolean
+): { variant: StatusVariant; label: string } {
+  if (registrada && estado === "PENDIENTE") {
+    return { variant: "aprobado", label: "Guardada · PD" }
+  }
+  return ESTADO_VARIANTE[estado]
+}
+
 export function formatearFecha(valor: string | null, hora?: string | null): string {
   if (!valor) return "Sin fecha"
   const [anio, mes, dia] = valor.split("-")

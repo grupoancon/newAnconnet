@@ -50,6 +50,8 @@ export type EntregaListado = {
   cerrada: boolean
   reagendamientos: number
   ofrecimientosPendientes: number
+  // Observaciones escritas en cualquier etapa del proceso (solo las que tienen texto).
+  observaciones?: { etapa: string; texto: string }[]
   creadoEn: string | null
 }
 

@@ -50,6 +50,7 @@ import {
   descargarReporteEntregasPdf,
 } from "@/lib/entregas-reporte"
 
+import { estadoPreEntrega } from "./detalle-comun"
 import { EntregaDetalleSheet } from "./entrega-detalle-sheet"
 
 const POR_PAGINA = 15
@@ -85,8 +86,38 @@ function fechaCorta(iso: string): string {
 
 type TabId = "sinActividad" | "agendadas" | "observacion" | "entregadas" | "todas"
 
+// Con observacion = proceso sin cerrar con una observacion en cualquier etapa: un paso
+// en estado OBSERVACION o un texto de observacion escrito en la pre-entrega o la entrega.
 function conObservacion(e: EntregaListado): boolean {
-  return !e.cerrada && (e.preEntrega === "OBSERVACION" || e.entrega === "OBSERVACION")
+  return (
+    !e.cerrada &&
+    (e.preEntrega === "OBSERVACION" ||
+      e.entrega === "OBSERVACION" ||
+      (e.observaciones?.length ?? 0) > 0)
+  )
+}
+
+function Observaciones({ e }: { e: EntregaListado }) {
+  const lista = e.observaciones ?? []
+  if (lista.length === 0) {
+    return (
+      <span className="text-muted-foreground italic">
+        Paso con observación, sin texto registrado.
+      </span>
+    )
+  }
+  return (
+    <>
+      {lista.map((o) => (
+        <span key={o.etapa} className="flex gap-1.5">
+          <span className="text-status-bloqueado-fg shrink-0 font-semibold">
+            {o.etapa}:
+          </span>
+          <span className="whitespace-pre-line">{o.texto}</span>
+        </span>
+      ))}
+    </>
+  )
 }
 
 // Agendadas = fecha/hora confirmada en la pre-entrega y entrega aún sin realizar.
@@ -293,13 +324,15 @@ export function EntregasContent() {
             }}
             className="focus-visible:ring-primary/50 w-fit cursor-pointer rounded-full transition hover:brightness-95 focus-visible:ring-2 focus-visible:outline-none"
           >
-            <StatusBadge variant={PASO_VARIANTE[e.preEntrega].variant}>
-              {PASO_VARIANTE[e.preEntrega].label}
+            <StatusBadge
+              variant={estadoPreEntrega(e.preEntrega, e.preRegistrada).variant}
+            >
+              {estadoPreEntrega(e.preEntrega, e.preRegistrada).label}
             </StatusBadge>
           </button>
         ) : (
-          <StatusBadge variant={PASO_VARIANTE[e.preEntrega].variant}>
-            {PASO_VARIANTE[e.preEntrega].label}
+          <StatusBadge variant={estadoPreEntrega(e.preEntrega, e.preRegistrada).variant}>
+            {estadoPreEntrega(e.preEntrega, e.preRegistrada).label}
           </StatusBadge>
         )}
       </>
@@ -667,6 +700,11 @@ export function EntregasContent() {
                           </span>
                         ) : null}
                       </div>
+                      {tab === "observacion" ? (
+                        <div className="bg-status-bloqueado-bg/40 flex flex-col gap-1 rounded-md px-3 py-2 text-xs">
+                          <Observaciones e={e} />
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -757,6 +795,17 @@ export function EntregasContent() {
                       {renderPreEntrega(e)}
                       {renderEntrega(e)}
                       {renderCierre(e)}
+                      {tab === "observacion" ? (
+                        <div className="bg-status-bloqueado-bg/40 col-span-full flex items-start gap-2 rounded-md px-3 py-2 text-[12px]">
+                          <AlertTriangle
+                            className="text-status-bloqueado-fg mt-0.5 size-3.5 shrink-0"
+                            strokeWidth={2}
+                          />
+                          <div className="flex flex-col gap-1">
+                            <Observaciones e={e} />
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
