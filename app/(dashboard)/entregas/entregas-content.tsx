@@ -87,7 +87,8 @@ function fechaCorta(iso: string): string {
 type TabId = "sinActividad" | "agendadas" | "observacion" | "entregadas" | "todas"
 
 // Con observacion = proceso sin cerrar con una observacion en cualquier etapa: un paso
-// en estado OBSERVACION o un texto de observacion escrito en la pre-entrega o la entrega.
+// en estado OBSERVACION o un texto escrito en el comentario del proceso, la pre-entrega
+// o la entrega.
 function conObservacion(e: EntregaListado): boolean {
   return (
     !e.cerrada &&
@@ -111,7 +112,7 @@ function Observaciones({ e }: { e: EntregaListado }) {
       {lista.map((o) => (
         <span key={o.etapa} className="flex gap-1.5">
           <span className="text-status-bloqueado-fg shrink-0 font-semibold">
-            {o.etapa}:
+            {o.etapa === "Proceso" ? "Comentario del proceso" : o.etapa}:
           </span>
           <span className="whitespace-pre-line">{o.texto}</span>
         </span>
