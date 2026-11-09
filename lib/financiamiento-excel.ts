@@ -10,12 +10,14 @@
 // SheetJS solo por esto; se importa dentro de la función para que no entre al bundle
 // inicial.
 
+import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import type { LoteInventario } from "@/lib/api/inventario-api"
 import type {
   CuotaAmortizacion,
   EntradaPago,
   FinanciamientoBackend,
   ProcesoBackend,
+  RefinanciamientoBackend,
 } from "@/lib/api/ventas-api"
 
 type Celda = string | number | null
@@ -29,9 +31,15 @@ type Hoja = {
 }
 
 export type OpcionesExcelFinanciamiento = {
-  financiamiento: FinanciamientoBackend
+  // Un Refinanciamiento tiene la misma forma (entradas + cronograma) más los ajustes
+  // manuales sobre el valor del lote (abonos / adicionales).
+  financiamiento: FinanciamientoBackend | RefinanciamientoBackend
   proceso: ProcesoBackend | null
   loteInfo: LoteInventario | null
+  // "refinanciamiento" replica exportRefinanExcel.ts de la intranet vieja: título
+  // "REFINANCIAMIENTO", fecha de creación (AAAA-MM-DD), VINT solo con interés > 0 y
+  // el pago total del lote ajustado por abonos/adicionales.
+  tipo?: "financiamiento" | "refinanciamiento"
 }
 
 // Código SAP del artículo "pago total lote" por proyecto — mismos códigos que la
@@ -95,8 +103,14 @@ function fechaLarga(fecha: string | null | undefined): string {
   return `${Number(dia)} ${MESES[indiceMes]} ${anio}`
 }
 
+// "Crédito BIESS (Sin Interés)" solo existe en Refinanciamiento y sigue las mismas
+// reglas que "Crédito BIESS" (ver esBiessLike en refinanciamiento-reporte-content.tsx).
+function esBiessLike(tipo: string | null | undefined): boolean {
+  return tipo === "Crédito BIESS" || tipo === "Crédito BIESS (Sin Interés)"
+}
+
 function esContadoLike(tipo: string | null | undefined): boolean {
-  return tipo === "Contado" || tipo === "Crédito BIESS"
+  return tipo === "Contado" || esBiessLike(tipo)
 }
 
 // Etiqueta de la columna "FORMA DE PAGO" — la misma que se ve en pantalla, en
@@ -153,7 +167,9 @@ export function construirHojasFinanciamiento({
   financiamiento,
   proceso,
   loteInfo,
+  tipo: documento = "financiamiento",
 }: OpcionesExcelFinanciamiento) {
+  const esRefinanciamiento = documento === "refinanciamiento"
   const tipo = financiamiento.financ_type
   const lote = loteInfo?.codigo ?? proceso?.cli_lote ?? ""
   const cliente = proceso?.titular?.nombre ?? proceso?.cli_name ?? ""
@@ -168,17 +184,25 @@ export function construirHojasFinanciamiento({
   const metros = dinero(loteInfo?.areaUtil ?? proceso?.lote_mts)
   // Misma regla que el reporte en pantalla: si el registro quedó sin "discount", el
   // descuento fijo de Contado (5%) / Crédito BIESS (3%) se recalcula.
+  // Si una promoción que no se acumula anuló el descuento por tipo, vale 0 (no se
+  // recalcula el %) — ver lib/descuento-tipo.ts.
+  const descuentoTipo = descuentoTipoDeRegistro({
+    financType: tipo,
+    discount: financiamiento.discount,
+    promoDiscount: financiamiento.promo_discount,
+    cantidadPromociones: financiamiento.promociones?.length ?? 0,
+    valorLote,
+  }).monto
+  // Igual que el anexo impreso: "DESCUENTO" suma todos los descuentos (tipo de
+  // financiamiento + extra + promociones) y "TOTAL A FINANCIAR" es el valor del lote
+  // menos ese total. La fila "DESCUENTO ADICIONAL" se mantiene (en 0) para no mover
+  // la estructura del archivo.
   const descuento = dinero(
-    numero(financiamiento.discount) ||
-      (tipo === "Contado"
-        ? valorLote * 0.05
-        : tipo === "Crédito BIESS"
-          ? valorLote * 0.03
-          : 0)
+    descuentoTipo +
+      numero(financiamiento.extra_discount) +
+      numero(financiamiento.promo_discount)
   )
-  const descuentoAdicional = dinero(
-    numero(financiamiento.extra_discount) + numero(financiamiento.promo_discount)
-  )
+  const totalAFinanciar = dinero(Math.max(0, valorLote - descuento))
 
   const entradas = financiamiento.entradas ?? []
   // Las filas "sobrante" (el préstamo ya quedó pagado) no son cuotas reales.
@@ -196,16 +220,22 @@ export function construirHojasFinanciamiento({
   // --- Hoja "Financiamiento" (todo desplazado a B2, como el original) -------------
   const anexo: Celda[][] = [
     ["ANEXO"],
-    ["FINANCIAMIENTO"],
+    [esRefinanciamiento ? "REFINANCIAMIENTO" : "FINANCIAMIENTO"],
     [""],
-    ["FECHA", "", fechaLarga(financiamiento.init_date ?? financiamiento.created_at)],
+    [
+      "FECHA",
+      "",
+      esRefinanciamiento
+        ? (financiamiento.created_at ?? financiamiento.init_date ?? "").slice(0, 10)
+        : fechaLarga(financiamiento.init_date ?? financiamiento.created_at),
+    ],
     ["CLIENTE", "", cliente],
     ["PROYECTO", "", proyecto],
     ["INMUEBLE", "", lote, "Mts", metros],
     ["VALOR DEL LOTE", "", valorLote],
     ["DESCUENTO", "", descuento, "OFRECIMIENTOS", financiamiento.ofrecimientos ?? ""],
-    ["DESCUENTO ADICIONAL", "", descuentoAdicional],
-    ["TOTAL A FINANCIAR", "", dinero(financiamiento.total_financ)],
+    ["DESCUENTO ADICIONAL", "", 0],
+    ["TOTAL A FINANCIAR", "", totalAFinanciar],
     [""],
     [
       "FORMA DE PAGO",
@@ -254,7 +284,7 @@ export function construirHojasFinanciamiento({
       : [""],
     ...(conCronograma
       ? cuotas.map((fila, i) => [
-          fila.mes,
+          fila.desembolso ? "DESEMBOLSO BIESS" : fila.mes,
           fechaCorta(fila.fecha),
           dinero(fila.capital),
           dinero(fila.interes),
@@ -309,9 +339,13 @@ export function construirHojasFinanciamiento({
   let escrituraCuota = 1
   cuotas.forEach((fila, i) => {
     const fecha = fechaCorta(fila.fecha)
-    const texto = `CUOTA ${i + 1}`
+    // "Mixto": la última fila es el desembolso BIESS.
+    const texto = fila.desembolso ? "DESEMBOLSO BIESS" : `CUOTA ${i + 1}`
     sap.push({ item: "VLOT", fec_pago: fecha, total: dinero(fila.capital), texto })
-    sap.push({ item: "VINT", fec_pago: fecha, total: dinero(fila.interes), texto })
+    // Refinanciamiento (igual que la intranet vieja) no manda el VINT en 0.
+    if (!esRefinanciamiento || dinero(fila.interes) > 0) {
+      sap.push({ item: "VINT", fec_pago: fecha, total: dinero(fila.interes), texto })
+    }
     const alicuota = dinero(alicuotaTotalCuota(fila))
     if (alicuota > 0) sap.push({ item: "VALI", fec_pago: fecha, total: alicuota, texto })
     const escritura = dinero(fila.escritura)
@@ -326,9 +360,20 @@ export function construirHojasFinanciamiento({
     }
   })
 
+  // En Refinanciamiento el valor del lote se ajustó antes de armar la tabla
+  // (+ adicionales − abono realizado − abono a capital, ver valorLoteAjustado en el
+  // backend), así que el pago total del lote deshace ese ajuste: resta adicionales y
+  // suma lo que el cliente ya había abonado.
+  const ajusteRefinanciamiento =
+    esRefinanciamiento && "abono_realizado" in financiamiento
+      ? numero(financiamiento.abono_realizado) +
+        numero(financiamiento.abono_capital) -
+        numero(financiamiento.adicionales)
+      : 0
   const totalLote = dinero(
     entradas.reduce((acc, f) => acc + numero(f.abono_lote ?? f.monto), 0) +
-      cuotas.reduce((acc, f) => acc + numero(f.capital) + numero(f.interes), 0)
+      cuotas.reduce((acc, f) => acc + numero(f.capital) + numero(f.interes), 0) +
+      ajusteRefinanciamiento
   )
   sap.push({
     item: codigoProyecto(nombreProyecto || proyecto),
@@ -351,7 +396,7 @@ export function construirHojasFinanciamiento({
       { nombre: "Financiamiento", filas: filasAnexo, combinadas },
       hojaSap,
     ] as Hoja[],
-    nombreArchivo: `Financiamiento - ${lote} - ${cliente}.xlsx`,
+    nombreArchivo: `${esRefinanciamiento ? "Refinanciamiento" : "Financiamiento"} - ${lote} - ${cliente}.xlsx`,
   }
 }
 

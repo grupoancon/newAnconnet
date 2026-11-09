@@ -30,6 +30,7 @@ import {
   type PromocionBackend,
 } from "@/lib/api/ventas-api"
 import {
+  acumulaDescuentoTipo,
   describirCondicionesPromocion,
   permiteAbonoRepartido,
 } from "@/lib/promociones"
@@ -58,6 +59,9 @@ type FormState = {
   abonoInicialMinimo: string
   // false = no aplica si el abono inicial se reparte en varias fechas.
   permiteAbonoRepartido: boolean
+  // false = si se aplica, el descuento por tipo de financiamiento (5% Contado, etc.)
+  // no va.
+  acumulaDescuentoTipo: boolean
 }
 
 const FORM_VACIO: FormState = {
@@ -69,6 +73,7 @@ const FORM_VACIO: FormState = {
   tiposFinanciamiento: [],
   abonoInicialMinimo: "",
   permiteAbonoRepartido: true,
+  acumulaDescuentoTipo: true,
 }
 
 function formatearMoneda(valor: string | number | null | undefined): string {
@@ -125,6 +130,7 @@ export function PromocionesContent() {
           ? String(Number(promo.abono_inicial_minimo))
           : "",
       permiteAbonoRepartido: permiteAbonoRepartido(promo),
+      acumulaDescuentoTipo: acumulaDescuentoTipo(promo),
     })
   }
 
@@ -146,6 +152,7 @@ export function PromocionesContent() {
         tiposFinanciamiento: form.tiposFinanciamiento,
         abonoInicialMinimo: Number(form.abonoInicialMinimo) || null,
         permiteAbonoRepartido: form.permiteAbonoRepartido,
+        acumulaDescuentoTipo: form.acumulaDescuentoTipo,
       }
       if (editandoId) {
         const actualizada = await actualizarPromocion(editandoId, datos)
@@ -296,6 +303,23 @@ export function PromocionesContent() {
                 <span className="text-muted-foreground block text-xs">
                   Desmárcalo para que solo aplique cuando el abono inicial se paga en una
                   sola fecha (ej. $1000 repartido en $500 + $500 no califica).
+                </span>
+              </span>
+            </label>
+            <label className="mt-3.5 flex cursor-pointer items-start gap-2 text-sm">
+              <Checkbox
+                className="mt-0.5"
+                checked={form.acumulaDescuentoTipo}
+                onCheckedChange={(v) =>
+                  setForm((f) => ({ ...f, acumulaDescuentoTipo: v === true }))
+                }
+              />
+              <span>
+                Se acumula con el descuento por tipo de financiamiento
+                <span className="text-muted-foreground block text-xs">
+                  Desmárcalo si al aplicar esta promoción ya no va el descuento del tipo
+                  de financiamiento (5% Contado, 3% Crédito BIESS / Mixto): ese descuento
+                  queda en $0 y se muestra tachado.
                 </span>
               </span>
             </label>

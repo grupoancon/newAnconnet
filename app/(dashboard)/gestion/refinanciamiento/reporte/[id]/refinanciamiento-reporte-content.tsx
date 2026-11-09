@@ -2,14 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/lib/navigation"
-import { ArrowLeft, CheckCircle2, Pencil, Printer, XCircle } from "lucide-react"
+import {
+  ArrowLeft,
+  CheckCircle2,
+  FileSpreadsheet,
+  Pencil,
+  Printer,
+  XCircle,
+} from "lucide-react"
 
 import { Can, useCan } from "@/components/shared/can"
 import { DashboardTopbar } from "@/components/shared/dashboard-topbar"
 import { EmptyState } from "@/components/shared/empty-state"
 import { Spinner } from "@/components/shared/spinner"
 import { StaticField } from "@/components/shared/select-field"
-import { StatusBadge, type StatusVariant } from "@/components/shared/status-badge"
+import { StatusBadge } from "@/components/shared/status-badge"
 import { useToast } from "@/components/shared/toast-provider"
 import { Button } from "@/components/ui/button"
 import {
@@ -37,6 +44,16 @@ import {
   type RefinanciamientoBackend,
   type ProcesoBackend,
 } from "@/lib/api/ventas-api"
+import { descargarFinanciamientoExcel } from "@/lib/financiamiento-excel"
+import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
+import {
+  ETIQUETA_ESTADO_REFINANCIAMIENTO,
+  VARIANTE_ESTADO_REFINANCIAMIENTO,
+  estadoRefinanciamiento,
+  imprimeComoBorrador,
+  sePuedeExportarExcel,
+  sePuedeImprimirRefinanciamiento,
+} from "@/lib/refinanciamiento-estado"
 import { cn } from "@/lib/utils"
 
 function formatearMoneda(valor: string | number | null | undefined): string {
@@ -71,17 +88,10 @@ function esBiessLike(tipo: string | null | undefined): boolean {
   return tipo === "Crédito BIESS" || tipo === "Crédito BIESS (Sin Interés)"
 }
 
-// A diferencia de financiamiento-reporte-content.tsx (que lee proceso.finan_status,
-// un estado de revisión aparte que vive en sale_process), acá el estado que gobierna
-// esta pantalla es directo refinanciamiento.status ("borrador" / "ingresado" /
-// "aprobado" / "rechazado") — proceso.finan_status refleja el Financiamiento del
-// proceso (si tiene), no el Refinanciamiento, y queda vacío cuando el proceso no
-// tiene financiamiento (el caso común acá). Solo con "aprobado" se habilita Imprimir.
-function normalizarEstado(crudo: string | null | undefined): StatusVariant {
-  const clave = (crudo ?? "").trim().toLowerCase()
-  if (clave === "aprobado" || clave === "ingresado" || clave === "rechazado") return clave
-  return "pendiente"
-}
+// El estado que gobierna esta pantalla es refinanciamiento.status (no
+// proceso.finan_status, que es del Financiamiento). Qué se puede hacer en cada uno:
+// lib/refinanciamiento-estado.ts (borrador → imprime con marca de agua; guardado =
+// preaprobado → reporte final; aprobado → además Excel).
 
 export function RefinanciamientoReporteContent({ id }: { id: string }) {
   const router = useRouter()
@@ -107,6 +117,10 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
   const [motivoRechazo, setMotivoRechazo] = useState("")
   const [rechazando, setRechazando] = useState(false)
   const puedeAprobar = useCan("refinanciamiento:aprobar")
+  // El borrador lo imprime también quien lo está armando (mismo permiso que
+  // retomarlo en el formulario); el reporte final, solo quien puede aprobar.
+  const puedeCrear = useCan("refinanciamiento:crear")
+  const puedeEditar = useCan("refinanciamiento:editar")
 
   useEffect(() => {
     if (!idNumero || Number.isNaN(idNumero)) {
@@ -205,8 +219,36 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
     }
   }
 
+  const [exportando, setExportando] = useState(false)
+
+  // Solo se ofrece con el refinanciamiento aprobado (ver el botón más abajo).
+  async function manejarExportarExcel() {
+    if (!refinanciamiento) return
+    setExportando(true)
+    try {
+      await descargarFinanciamientoExcel({
+        financiamiento: refinanciamiento,
+        proceso,
+        loteInfo,
+        tipo: "refinanciamiento",
+      })
+    } catch {
+      toast({
+        variant: "error",
+        title: "No se pudo generar el Excel",
+        description: "Intenta de nuevo.",
+      })
+    } finally {
+      setExportando(false)
+    }
+  }
+
   const titular = proceso?.titular ?? null
-  const estado = normalizarEstado(refinanciamiento?.status)
+  const estado = estadoRefinanciamiento(refinanciamiento?.status)
+  const esBorrador = imprimeComoBorrador(estado)
+  const puedeImprimir =
+    sePuedeImprimirRefinanciamiento(estado) &&
+    (esBorrador ? puedeCrear || puedeEditar || puedeAprobar : puedeAprobar)
 
   const valorLote = loteInfo?.pvp ?? proceso?.lote_price ?? null
   const valorLoteNumero =
@@ -214,18 +256,22 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
   // "Contado"/"Crédito BIESS" siempre llevan un descuento fijo (5%/3%, misma regla que
   // new/[id]) — si el registro quedó guardado sin el campo "discount", se recalcula
   // igual para mostrarlo.
-  const descuentoTipo =
-    Number(refinanciamiento?.discount) ||
-    (refinanciamiento?.financ_type === "Contado"
-      ? valorLoteNumero * 0.05
-      : esBiessLike(refinanciamiento?.financ_type)
-        ? valorLoteNumero * 0.03
-        : 0)
-  // "Descuento" en el reporte muestra el descuento por tipo de refinanciamiento + el
-  // descuento extra juntos en una sola línea — la promoción se muestra aparte, ya que
-  // va identificada por su propio nombre.
-  const descuentoConDescuentoExtra =
-    descuentoTipo + (Number(refinanciamiento?.extra_discount) || 0)
+  // Descuento por tipo tal como quedó guardado; si una promoción que no se acumula
+  // lo anuló, vale 0 y se muestra tachado (ver lib/descuento-tipo.ts).
+  const descuentoTipoInfo = descuentoTipoDeRegistro({
+    financType: refinanciamiento?.financ_type,
+    discount: refinanciamiento?.discount,
+    promoDiscount: refinanciamiento?.promo_discount,
+    cantidadPromociones: refinanciamiento?.promociones?.length ?? 0,
+    valorLote: valorLoteNumero,
+  })
+  const descuentoTipo = descuentoTipoInfo.monto
+  // "Descuento" suma TODOS los descuentos en una sola línea: el del tipo de
+  // financiamiento, el extra y el de promociones.
+  const descuentosTotales =
+    descuentoTipo +
+    (Number(refinanciamiento?.extra_discount) || 0) +
+    (Number(refinanciamiento?.promo_discount) || 0)
 
   const entradas = refinanciamiento?.entradas ?? []
   // La columna de observaciones (lo que el asesor escribe al lado de cada fila en el
@@ -331,7 +377,9 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
             </div>
             {refinanciamiento && (
               <div className="relative">
-                <StatusBadge variant={estado} />
+                <StatusBadge variant={VARIANTE_ESTADO_REFINANCIAMIENTO[estado]}>
+                  {ETIQUETA_ESTADO_REFINANCIAMIENTO[estado]}
+                </StatusBadge>
               </div>
             )}
           </div>
@@ -425,17 +473,26 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
                       mono
                     />
                   )}
-                  {descuentoConDescuentoExtra > 0 && (
+                  {descuentosTotales > 0 && (
                     <StaticField
                       label="Descuento"
-                      value={formatearMoneda(descuentoConDescuentoExtra)}
+                      value={formatearMoneda(descuentosTotales)}
                       mono
                     />
                   )}
-                  {Number(refinanciamiento.promo_discount) > 0 && (
+                  {descuentoTipoInfo.anulado && (
                     <StaticField
-                      label="Descuento promoción"
-                      value={formatearMoneda(refinanciamiento.promo_discount)}
+                      label={`Descuento ${descuentoTipoInfo.porcentaje * 100}% (${refinanciamiento.financ_type})`}
+                      value={
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="text-muted-foreground line-through">
+                            {formatearMoneda(descuentoTipoInfo.montoSinPromocion)}
+                          </span>
+                          <span className="text-destructive truncate font-sans text-xs">
+                            No aplica con la promoción
+                          </span>
+                        </span>
+                      }
                       mono
                     />
                   )}
@@ -598,7 +655,9 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
                                     fila.sobrante && "bg-destructive/10 text-destructive"
                                   )}
                                 >
-                                  <td className="px-4.5 py-1.5 font-bold">{fila.mes}</td>
+                                  <td className="px-4.5 py-1.5 font-bold">
+                                    {fila.desembolso ? "Desembolso BIESS" : fila.mes}
+                                  </td>
                                   <td className="text-muted-foreground px-4.5 py-1.5">
                                     {formatearFecha(fila.fecha)}
                                   </td>
@@ -729,7 +788,7 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
                     )}
                   </div>
                   <div className="flex flex-col gap-3 sm:flex-row [&>button]:w-full sm:[&>button]:w-auto">
-                    {estado === "ingresado" && (
+                    {estado === "preaprobado" && (
                       <>
                         <Can permiso="refinanciamiento:aprobar">
                           <Button
@@ -746,23 +805,21 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
                             Aprobar refinanciamiento
                           </Button>
                         </Can>
-                        {puedeAprobar && (
-                          <Button
-                            variant="outline"
-                            onClick={() =>
-                              router.push(
-                                `/gestion/refinanciamiento/reporte/${idNumero}/imprimir`
-                              )
-                            }
-                          >
-                            <Printer className="size-3.5" strokeWidth={1.8} />
-                            Imprimir (borrador)
-                          </Button>
-                        )}
                       </>
                     )}
-                    {estado === "aprobado" && puedeAprobar && (
+                    {sePuedeExportarExcel(estado) && (
                       <Button
+                        variant="outline"
+                        disabled={exportando}
+                        onClick={manejarExportarExcel}
+                      >
+                        <FileSpreadsheet className="size-3.5" strokeWidth={1.8} />
+                        {exportando ? "Exportando…" : "Exportar a Excel"}
+                      </Button>
+                    )}
+                    {puedeImprimir && (
+                      <Button
+                        variant={esBorrador ? "outline" : "default"}
                         onClick={() =>
                           router.push(
                             `/gestion/refinanciamiento/reporte/${idNumero}/imprimir`
@@ -770,7 +827,7 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
                         }
                       >
                         <Printer className="size-3.5" strokeWidth={1.8} />
-                        Imprimir
+                        {esBorrador ? "Imprimir (borrador)" : "Imprimir"}
                       </Button>
                     )}
                   </div>

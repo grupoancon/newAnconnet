@@ -1,5 +1,6 @@
 "use client"
 
+import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/lib/navigation"
 import { Plus, Printer, Trash2, ArrowLeft } from "lucide-react"
@@ -346,15 +347,20 @@ export function OfertaImprimirContent({ id }: { id: string }) {
   // `discount`; el descuento extra se suma aparte. Sin financiamiento todavía, no hay
   // nada que mostrar (ver descuentoMonto = null más abajo, no 0 — 0 se leería como "sin
   // descuento" en vez de "todavía no se sabe").
-  const descuentoTipo =
-    Number(financiamiento?.discount) ||
-    (financiamiento?.financ_type === "Contado"
-      ? precioNumero * 0.05
-      : financiamiento?.financ_type === "Crédito BIESS"
-        ? precioNumero * 0.03
-        : 0)
+  // "Descuento" = TODOS los descuentos del financiamiento: el del tipo (5% Contado,
+  // 3% BIESS, o 0 si una promoción que no se acumula lo anuló — lib/descuento-tipo.ts),
+  // el extra y el de promociones.
+  const descuentoTipo = descuentoTipoDeRegistro({
+    financType: financiamiento?.financ_type,
+    discount: financiamiento?.discount,
+    promoDiscount: financiamiento?.promo_discount,
+    cantidadPromociones: financiamiento?.promociones?.length ?? 0,
+    valorLote: precioNumero,
+  }).monto
   const descuentoMonto = financiamiento
-    ? descuentoTipo + (Number(financiamiento.extra_discount) || 0)
+    ? descuentoTipo +
+      (Number(financiamiento.extra_discount) || 0) +
+      (Number(financiamiento.promo_discount) || 0)
     : null
   const total = precioNumero - (descuentoMonto ?? 0)
 
@@ -959,7 +965,11 @@ function DatosLaboralesCliente({ oferta }: { oferta: OfertaBackend }) {
           </Fila3>
           <Fila3>
             <Campo label="Sector" valor={oferta.cli_trabSector} />
-            <Campo label="Dirección del Trabajo" valor={oferta.cli_trabDireccion} ancho={2} />
+            <Campo
+              label="Dirección del Trabajo"
+              valor={oferta.cli_trabDireccion}
+              ancho={2}
+            />
           </Fila3>
           <Fila3>
             <Campo label="Telf. Trabajo" valor={tel(oferta.cli_trabTelefono)} />

@@ -370,6 +370,8 @@ export function OfertaCompraContent({ id }: { id: string }) {
   const [ofertaId, setOfertaId] = useState<number | null>(null)
   const [form, setForm] = useState<Record<CampoFormulario, string>>(FORM_VACIO)
   const [cargando, setCargando] = useState(true)
+  const usuarioActual = useSession()
+  const nombreUsuarioActual = usuarioActual.nombre
   const [error, setError] = useState<string | null>(null)
   const [paso, setPaso] = useState(0)
   const [guardando, setGuardando] = useState(false)
@@ -614,9 +616,13 @@ export function OfertaCompraContent({ id }: { id: string }) {
 
         // Si la oferta todavía no tiene "Teléfono del asesor", se precarga con el del
         // primer asesor del proceso (cli_asesor guarda los nombres separados por coma,
-        // en el orden en que se eligieron). Solo rellena si el campo sigue vacío, y si
-        // falla la consulta el asesor lo escribe a mano como antes.
-        const primerAsesor = (procesoData.cli_asesor ?? "").split(",")[0]?.trim() ?? ""
+        // en el orden en que se eligieron). Si el proceso no tiene asesor guardado, se
+        // usa el del usuario que está llenando la oferta (por lo general es el mismo
+        // asesor). Solo rellena si el campo sigue vacío, y si falla la consulta el
+        // asesor lo escribe a mano como antes.
+        const primerAsesor =
+          (procesoData.cli_asesor ?? "").split(",")[0]?.trim() ||
+          nombreUsuarioActual.trim()
         if (!ofertaExistente?.cli_asesorTelf && primerAsesor) {
           const { telefono } = await obtenerTelefonoAsesor(primerAsesor).catch(() => ({
             telefono: null,
@@ -651,7 +657,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
     return () => {
       cancelado = true
     }
-  }, [idNumero])
+  }, [idNumero, nombreUsuarioActual])
 
   useEffect(() => {
     if (form.cli_contac !== "CLIENTE" || personasProceso !== null || cargandoPersonas)
@@ -678,7 +684,6 @@ export function OfertaCompraContent({ id }: { id: string }) {
   // escribe — si se le vence la sesión o se cierra la pestaña a mitad del formulario,
   // al volver encuentra todo como lo dejó. La oferta real (y lo que ve el revisor) no
   // cambia hasta el "Guardar" final, que además borra el borrador.
-  const usuarioActual = useSession()
   const datosBorrador = useMemo(
     () => ({
       version: 1 as const,
@@ -710,7 +715,16 @@ export function OfertaCompraContent({ id }: { id: string }) {
     alRecuperar: (recuperado) => {
       // FORM_VACIO primero: si después se agregan campos nuevos al formulario, un
       // borrador viejo (sin esos campos) igual deja el form completo.
-      setForm({ ...FORM_VACIO, ...recuperado.form })
+      // Un borrador guardado antes de que se precargara el teléfono del asesor lo
+      // trae vacío — en ese caso se conserva el precargado en vez de borrarlo.
+      setForm((actual) => {
+        const restaurado = { ...FORM_VACIO, ...recuperado.form }
+        if (!restaurado.cli_asesorTelf && actual.cli_asesorTelf) {
+          restaurado.cli_asesorTelf = actual.cli_asesorTelf
+          restaurado.cli_asesorTelf_prefijo = actual.cli_asesorTelf_prefijo
+        }
+        return restaurado
+      })
       setPaso(recuperado.paso ?? 0)
       setClientesExtra(recuperado.clientesExtra ?? [])
       setDatosFinancieros((actual) => ({ ...actual, ...recuperado.datosFinancieros }))

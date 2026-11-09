@@ -36,6 +36,7 @@ import {
   type ProcesoBackend,
 } from "@/lib/api/ventas-api"
 import { descargarFinanciamientoExcel } from "@/lib/financiamiento-excel"
+import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import { cn } from "@/lib/utils"
 
 function formatearMoneda(valor: string | number | null | undefined): string {
@@ -191,18 +192,22 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
   // "Contado"/"Crédito BIESS" siempre llevan un descuento fijo (5%/3%, misma regla que
   // new/[id]) — si el registro quedó guardado sin el campo "discount", se recalcula
   // igual para mostrarlo.
-  const descuentoTipo =
-    Number(financiamiento?.discount) ||
-    (financiamiento?.financ_type === "Contado"
-      ? valorLoteNumero * 0.05
-      : financiamiento?.financ_type === "Crédito BIESS"
-        ? valorLoteNumero * 0.03
-        : 0)
-  // "Descuento" en el reporte muestra el descuento por tipo de financiamiento + el
-  // descuento extra juntos en una sola línea — la promoción se muestra aparte, ya que
-  // va identificada por su propio nombre.
-  const descuentoConDescuentoExtra =
-    descuentoTipo + (Number(financiamiento?.extra_discount) || 0)
+  // Descuento por tipo tal como quedó guardado; si una promoción que no se acumula
+  // lo anuló, vale 0 y se muestra tachado (ver lib/descuento-tipo.ts).
+  const descuentoTipoInfo = descuentoTipoDeRegistro({
+    financType: financiamiento?.financ_type,
+    discount: financiamiento?.discount,
+    promoDiscount: financiamiento?.promo_discount,
+    cantidadPromociones: financiamiento?.promociones?.length ?? 0,
+    valorLote: valorLoteNumero,
+  })
+  const descuentoTipo = descuentoTipoInfo.monto
+  // "Descuento" suma TODOS los descuentos en una sola línea: el del tipo de
+  // financiamiento, el extra y el de promociones.
+  const descuentosTotales =
+    descuentoTipo +
+    (Number(financiamiento?.extra_discount) || 0) +
+    (Number(financiamiento?.promo_discount) || 0)
 
   const entradas = financiamiento?.entradas ?? []
   // La columna de observaciones (lo que el asesor escribe al lado de cada fila en el
@@ -364,17 +369,26 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                     value={formatearMetraje(loteInfo?.areaUtil ?? proceso?.lote_mts)}
                     mono
                   />
-                  {descuentoConDescuentoExtra > 0 && (
+                  {descuentosTotales > 0 && (
                     <StaticField
                       label="Descuento"
-                      value={formatearMoneda(descuentoConDescuentoExtra)}
+                      value={formatearMoneda(descuentosTotales)}
                       mono
                     />
                   )}
-                  {Number(financiamiento.promo_discount) > 0 && (
+                  {descuentoTipoInfo.anulado && (
                     <StaticField
-                      label="Descuento por promoción"
-                      value={formatearMoneda(financiamiento.promo_discount)}
+                      label={`Descuento ${descuentoTipoInfo.porcentaje * 100}% (${financiamiento.financ_type})`}
+                      value={
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="text-muted-foreground line-through">
+                            {formatearMoneda(descuentoTipoInfo.montoSinPromocion)}
+                          </span>
+                          <span className="text-destructive truncate font-sans text-xs">
+                            No aplica con la promoción
+                          </span>
+                        </span>
+                      }
                       mono
                     />
                   )}
@@ -539,7 +553,9 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                                     fila.sobrante && "bg-destructive/10 text-destructive"
                                   )}
                                 >
-                                  <td className="px-4.5 py-1.5 font-bold">{fila.mes}</td>
+                                  <td className="px-4.5 py-1.5 font-bold">
+                                    {fila.desembolso ? "Desembolso BIESS" : fila.mes}
+                                  </td>
                                   <td className="text-muted-foreground px-4.5 py-1.5">
                                     {formatearFecha(fila.fecha)}
                                   </td>

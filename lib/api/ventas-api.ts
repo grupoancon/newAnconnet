@@ -27,7 +27,10 @@ const TIMEOUT_MS = 15_000
 
 // Exportado para que lib/api/convenios-api.ts (mismo backend, base "/ventas") lo
 // reuse en vez de duplicar el manejo de timeout/errores.
-export async function ventasFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function ventasFetch<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
   let response: Response
   const timeoutController = new AbortController()
   const timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUT_MS)
@@ -225,7 +228,10 @@ export type ActualizarProcesoInput = Partial<{
   location: string
 }>
 
-export function actualizarProceso(idProceso: number | string, datos: ActualizarProcesoInput) {
+export function actualizarProceso(
+  idProceso: number | string,
+  datos: ActualizarProcesoInput
+) {
   return ventasFetch<ProcesoBackend>(`/procesos/${idProceso}`, {
     method: "PATCH",
     body: JSON.stringify(datos),
@@ -950,6 +956,9 @@ export type CuotaAmortizacion = {
   // true si el asesor fijó a mano la escritura de esta fila — no se toca al repartir
   // el total de escritura entre las demás cuotas reales.
   escrituraEditada: boolean
+  // Solo "Mixto": última fila = desembolso BIESS (no editable). Ver
+  // agregarDesembolsoAlCronograma en newApi.
+  desembolso?: boolean
 }
 
 // Tabla de entrada (abono inicial + cuotas de entrada) — va arriba del cronograma de
@@ -1206,13 +1215,10 @@ export function crearRefinanciamiento(
   idProceso: number | string,
   datos: CrearRefinanciamientoInput
 ) {
-  return ventasFetch<RefinanciamientoBackend>(
-    `/procesos/${idProceso}/refinanciamiento`,
-    {
-      method: "POST",
-      body: JSON.stringify(datos),
-    }
-  )
+  return ventasFetch<RefinanciamientoBackend>(`/procesos/${idProceso}/refinanciamiento`, {
+    method: "POST",
+    body: JSON.stringify(datos),
+  })
 }
 
 // POST /ventas/refinanciamientos/:id/regenerar — recalcula ese refinanciamiento
@@ -1382,10 +1388,7 @@ export function crearCotizacion(datos: CrearCotizacionInput) {
 // POST /ventas/cotizaciones/:id/regenerar — única vía de guardado real (arma/recalcula
 // la configuración de financiamiento sobre el casco ya creado). Solo quien la creó
 // puede llamarla.
-export function regenerarCotizacion(
-  id: number | string,
-  datos: GuardarCotizacionInput
-) {
+export function regenerarCotizacion(id: number | string, datos: GuardarCotizacionInput) {
   return ventasFetch<CotizacionBackend>(`/cotizaciones/${id}/regenerar`, {
     method: "POST",
     body: JSON.stringify(datos),
@@ -1528,6 +1531,9 @@ export type PromocionBackend = {
   abono_inicial_minimo?: string | null
   // false/0 = no aplica si el abono inicial se reparte en varias fechas.
   permite_abono_repartido?: boolean | number | null
+  // false/0 = no se acumula: si se aplica, el descuento por tipo de financiamiento
+  // (5% Contado / 3% BIESS / 3% Mixto) no va. null/ausente = sí se acumula.
+  acumula_descuento_tipo?: boolean | number | null
 }
 
 export type PromocionInput = {
@@ -1542,6 +1548,7 @@ export type PromocionInput = {
   tiposFinanciamiento?: string[] | null
   abonoInicialMinimo?: number | null
   permiteAbonoRepartido?: boolean
+  acumulaDescuentoTipo?: boolean
 }
 
 // GET /ventas/promociones — todas (para la pantalla de gestión).
@@ -1642,12 +1649,14 @@ export type ResumenMisVentas = {
 // (req.user.name), matcheado contra sale_process.cli_asesor (texto libre, sin FK) —
 // nunca se manda el nombre desde acá, evita que el cliente pueda pedir las ventas de
 // otro asesor con solo cambiar un query param.
-export function obtenerMisVentas(filtros: {
-  proyectoId?: number
-  desde?: string // YYYY-MM-DD
-  hasta?: string // YYYY-MM-DD
-  estado?: EstadoGeneralVenta
-} = {}) {
+export function obtenerMisVentas(
+  filtros: {
+    proyectoId?: number
+    desde?: string // YYYY-MM-DD
+    hasta?: string // YYYY-MM-DD
+    estado?: EstadoGeneralVenta
+  } = {}
+) {
   const qs = new URLSearchParams()
   if (filtros.proyectoId) qs.set("proyectoId", String(filtros.proyectoId))
   if (filtros.desde) qs.set("desde", filtros.desde)
@@ -1662,13 +1671,15 @@ export function obtenerMisVentas(filtros: {
 // GET /ventas/reporte-ventas — igual que obtenerMisVentas pero de TODA la empresa
 // (permiso "ventas:reporte", no "ventas:crear"); admite filtrar por asesor (coincidencia
 // parcial contra cli_asesor, texto libre).
-export function obtenerReporteVentas(filtros: {
-  proyectoId?: number
-  desde?: string // YYYY-MM-DD
-  hasta?: string // YYYY-MM-DD
-  estado?: EstadoGeneralVenta
-  asesor?: string
-} = {}) {
+export function obtenerReporteVentas(
+  filtros: {
+    proyectoId?: number
+    desde?: string // YYYY-MM-DD
+    hasta?: string // YYYY-MM-DD
+    estado?: EstadoGeneralVenta
+    asesor?: string
+  } = {}
+) {
   const qs = new URLSearchParams()
   if (filtros.proyectoId) qs.set("proyectoId", String(filtros.proyectoId))
   if (filtros.desde) qs.set("desde", filtros.desde)

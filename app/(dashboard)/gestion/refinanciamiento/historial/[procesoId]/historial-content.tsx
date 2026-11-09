@@ -8,7 +8,12 @@ import { DashboardTopbar } from "@/components/shared/dashboard-topbar"
 import { EmptyState } from "@/components/shared/empty-state"
 import { StaticField } from "@/components/shared/select-field"
 import { Spinner } from "@/components/shared/spinner"
-import { StatusBadge, type StatusVariant } from "@/components/shared/status-badge"
+import { StatusBadge } from "@/components/shared/status-badge"
+import {
+  ETIQUETA_ESTADO_REFINANCIAMIENTO,
+  VARIANTE_ESTADO_REFINANCIAMIENTO,
+  estadoRefinanciamiento,
+} from "@/lib/refinanciamiento-estado"
 import { Button } from "@/components/ui/button"
 import {
   InventarioApiError,
@@ -40,14 +45,6 @@ function formatearFecha(fecha: string | null | undefined): string {
   const [anio, mes, dia] = fecha.slice(0, 10).split("-")
   if (!anio || !mes || !dia) return fecha
   return `${dia}/${mes}/${anio}`
-}
-
-// Mismo criterio que refinanciamiento-reporte-content.tsx: "borrador" (y cualquier
-// otro valor inesperado) cae en el badge "pendiente".
-function normalizarEstado(crudo: string | null | undefined): StatusVariant {
-  const clave = (crudo ?? "").trim().toLowerCase()
-  if (clave === "aprobado" || clave === "ingresado" || clave === "rechazado") return clave
-  return "pendiente"
 }
 
 // Un lote puede refinanciarse más de una vez — esta pantalla lista todo el historial
@@ -244,7 +241,19 @@ export function HistorialRefinanciamientosContent({ procesoId }: { procesoId: st
                           <span className="text-sm font-semibold">
                             {refi.financ_type ?? "—"}
                           </span>
-                          <StatusBadge variant={normalizarEstado(refi.status)} />
+                          <StatusBadge
+                            variant={
+                              VARIANTE_ESTADO_REFINANCIAMIENTO[
+                                estadoRefinanciamiento(refi.status)
+                              ]
+                            }
+                          >
+                            {
+                              ETIQUETA_ESTADO_REFINANCIAMIENTO[
+                                estadoRefinanciamiento(refi.status)
+                              ]
+                            }
+                          </StatusBadge>
                         </div>
                         <div className="border-border flex items-end justify-between gap-3 border-t pt-2">
                           <div>
@@ -296,7 +305,19 @@ export function HistorialRefinanciamientosContent({ procesoId }: { procesoId: st
                           {formatearMoneda(refi.total_financ)}
                         </span>
                         <span>
-                          <StatusBadge variant={normalizarEstado(refi.status)} />
+                          <StatusBadge
+                            variant={
+                              VARIANTE_ESTADO_REFINANCIAMIENTO[
+                                estadoRefinanciamiento(refi.status)
+                              ]
+                            }
+                          >
+                            {
+                              ETIQUETA_ESTADO_REFINANCIAMIENTO[
+                                estadoRefinanciamiento(refi.status)
+                              ]
+                            }
+                          </StatusBadge>
                         </span>
                         <span className="text-muted-foreground text-right">⋯</span>
                       </div>

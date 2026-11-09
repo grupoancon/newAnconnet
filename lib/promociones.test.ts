@@ -6,12 +6,16 @@ import { describe, expect, it } from "vitest"
 
 import {
   abonoInicialDeTabla,
+  acumulaDescuentoTipo,
+  promocionesAnulanDescuentoTipo,
   describirCondicionesPromocion,
   filasAbonoInicialDeTabla,
   minimoDePromocion,
   motivoPromocionNoAplica,
   partesCondicionesPromocion,
   permiteAbonoRepartido,
+  primerAbonoInicialDeTabla,
+  primerAbonoInicialRepartido,
   tiposDePromocion,
 } from "./promociones"
 
@@ -25,7 +29,10 @@ const abono = (monto: number | string): Fila => ({
   formaPago: "Abono inicial",
   abonoLote: String(monto),
 })
-const entrada = (monto: number): Fila => ({ formaPago: "Entrada", abonoLote: String(monto) })
+const entrada = (monto: number): Fila => ({
+  formaPago: "Entrada",
+  abonoLote: String(monto),
+})
 const pagoTotal = (monto: number): Fila => ({
   formaPago: "Pago total",
   abonoLote: String(monto),
@@ -52,7 +59,8 @@ function evaluar(p: Promo, tipo: string, filas: Fila[]) {
     p,
     tipo,
     abonoInicialDeTabla(filas),
-    filasAbonoInicialDeTabla(filas)
+    filasAbonoInicialDeTabla(filas),
+    primerAbonoInicialDeTabla(filas)
   )
 }
 
@@ -194,9 +202,12 @@ describe("condición: abono inicial repartido", () => {
     ["tres fechas", [abono(300), abono(300), abono(400)], motivo],
     ["1000 + fila en $0", [abono(1000), abono(0)], null],
     ["una fila + cuotas Entrada", [abono(1000), entrada(100), entrada(100)], null],
-  ] as Array<[string, Fila[], string | null]>)("no permite repartir — %s", (_n, filas, esperado) => {
-    expect(evaluar(noReparte, "Contado", filas)).toBe(esperado)
-  })
+  ] as Array<[string, Fila[], string | null]>)(
+    "no permite repartir — %s",
+    (_n, filas, esperado) => {
+      expect(evaluar(noReparte, "Contado", filas)).toBe(esperado)
+    }
+  )
 
   it("sin tabla todavía: usa la cantidad de fechas del generador", () => {
     expect(motivoPromocionNoAplica(noReparte, "Contado", 1000, 2)).toBe(motivo)
@@ -207,7 +218,10 @@ describe("condición: abono inicial repartido", () => {
 
   it.each([1, true, null])("valor %p sí deja repartir", (valor) => {
     expect(
-      evaluar(promo({ permite_abono_repartido: valor }), "Contado", [abono(500), abono(500)])
+      evaluar(promo({ permite_abono_repartido: valor }), "Contado", [
+        abono(500),
+        abono(500),
+      ])
     ).toBeNull()
   })
 })
@@ -226,16 +240,39 @@ describe("condiciones combinadas: Contado + $1000 + sin repartir", () => {
     ["todo cumple", "Contado", [abono(1000)], null],
     ["tipo no", "Mixto", [abono(1000)], /^Solo para/],
     ["mínimo no", "Contado", [abono(999)], /^Pide abono/],
-    ["repartido", "Contado", [abono(600), abono(600)], /repartido/],
+    // Repartido: lo que cuenta es que la PRIMERA cuota llegue al mínimo.
+    [
+      "repartido, 1.ª cuota < mínimo",
+      "Contado",
+      [abono(600), abono(600)],
+      /^La primera cuota/,
+    ],
+    ["$2000 en 2 cuotas de $1000", "Contado", [abono(1000), abono(1000)], null],
+    [
+      "$2000 en 3 cuotas de $666.67",
+      "Contado",
+      [abono(666.67), abono(666.67), abono(666.66)],
+      /^La primera cuota/,
+    ],
+    ["1.ª cuota $1500 + $500", "Contado", [abono(1500), abono(500)], null],
+    [
+      "1.ª cuota $999.99 + $1000",
+      "Contado",
+      [abono(999.99), abono(1000)],
+      /^La primera cuota/,
+    ],
     ["tipo no + mínimo no", "Mixto", [abono(10)], /^Solo para/],
     ["tipo no + repartido", "Mixto", [abono(600), abono(600)], /^Solo para/],
     ["mínimo no + repartido", "Contado", [abono(400), abono(400)], /^Pide abono/],
     ["nada cumple", "Mixto", [abono(1), abono(1)], /^Solo para/],
-  ] as Array<[string, string, Fila[], RegExp | null]>)("%s", (_n, tipo, filas, esperado) => {
-    const motivo = evaluar(p, tipo, filas)
-    if (esperado === null) expect(motivo).toBeNull()
-    else expect(motivo).toMatch(esperado)
-  })
+  ] as Array<[string, string, Fila[], RegExp | null]>)(
+    "%s",
+    (_n, tipo, filas, esperado) => {
+      const motivo = evaluar(p, tipo, filas)
+      if (esperado === null) expect(motivo).toBeNull()
+      else expect(motivo).toMatch(esperado)
+    }
+  )
 })
 
 // --- Texto de las condiciones --------------------------------------------------------
@@ -257,7 +294,7 @@ describe("texto de las condiciones en los listados", () => {
       permite_abono_repartido: 0,
     })
     expect(describirCondicionesPromocion(p)).toBe(
-      "Contado, Mixto · Abono inicial ≥ $1,000.00 · Abono sin repartir"
+      "Contado, Mixto · Abono inicial ≥ $1,000.00 · Mínimo en la 1.ª cuota del abono"
     )
     expect(partesCondicionesPromocion(p)).toEqual({
       tipos: "Contado, Mixto",
@@ -267,14 +304,62 @@ describe("texto de las condiciones en los listados", () => {
   })
 
   it("cada una sola", () => {
-    expect(describirCondicionesPromocion(promo({ tipos_financiamiento: ["Contado"] }))).toBe(
-      "Contado"
-    )
+    expect(
+      describirCondicionesPromocion(promo({ tipos_financiamiento: ["Contado"] }))
+    ).toBe("Contado")
     expect(describirCondicionesPromocion(promo({ abono_inicial_minimo: "1000.5" }))).toBe(
       "Abono inicial ≥ $1,000.50"
     )
     expect(describirCondicionesPromocion(promo({ permite_abono_repartido: 0 }))).toBe(
       "Abono sin repartir"
+    )
+  })
+})
+
+// --- Primera cuota del abono inicial ---------------------------------------------------
+
+describe("primera cuota del abono inicial", () => {
+  it("toma la primera fila 'Abono inicial' con monto", () => {
+    expect(primerAbonoInicialDeTabla([])).toBe(0)
+    expect(primerAbonoInicialDeTabla([abono(0), abono(700), abono(300)])).toBe(700)
+  })
+
+  it("antes de generar la tabla, reparte en partes iguales", () => {
+    expect(primerAbonoInicialRepartido(2000, 1)).toBe(2000)
+    expect(primerAbonoInicialRepartido(2000, 2)).toBe(1000)
+    expect(primerAbonoInicialRepartido(2000, 3)).toBe(666.67)
+  })
+
+  it("sin abono mínimo, 'sin repartir' sigue exigiendo una sola fecha", () => {
+    const p = promo({ permite_abono_repartido: 0 })
+    expect(evaluar(p, "Contado", [abono(5000), abono(5000)])).toMatch(/repartido/)
+  })
+})
+
+// --- No se acumula con el descuento por tipo -----------------------------------------
+
+describe("promociones que no se acumulan con el descuento por tipo", () => {
+  it("acumulaDescuentoTipo: null/1/true = sí; 0/'0'/false = no", () => {
+    expect(acumulaDescuentoTipo(promo())).toBe(true)
+    for (const valor of [1, "1", true, null]) {
+      expect(acumulaDescuentoTipo(promo({ acumula_descuento_tipo: valor }))).toBe(true)
+    }
+    for (const valor of [0, "0", false]) {
+      expect(acumulaDescuentoTipo(promo({ acumula_descuento_tipo: valor }))).toBe(false)
+    }
+  })
+
+  it("basta una promoción que no se acumula para anular el descuento por tipo", () => {
+    expect(promocionesAnulanDescuentoTipo([])).toBe(false)
+    expect(promocionesAnulanDescuentoTipo([promo(), promo()])).toBe(false)
+    expect(
+      promocionesAnulanDescuentoTipo([promo(), promo({ acumula_descuento_tipo: 0 })])
+    ).toBe(true)
+  })
+
+  it("se muestra en el texto de las condiciones", () => {
+    expect(describirCondicionesPromocion(promo({ acumula_descuento_tipo: 0 }))).toBe(
+      "No se acumula con el descuento por tipo"
     )
   })
 })

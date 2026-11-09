@@ -1,5 +1,6 @@
 "use client"
 
+import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/lib/navigation"
 import { ArrowLeft, Pencil, Printer } from "lucide-react"
@@ -111,13 +112,15 @@ export function CotizacionReporteContent({ id }: { id: string }) {
   // "Contado"/"Crédito BIESS" siempre llevan un descuento fijo (5%/3%, misma regla que
   // new/[id]) — si el registro quedó guardado sin el campo "discount", se recalcula
   // igual para mostrarlo.
-  const descuentoTipo =
-    Number(cotizacion?.discount) ||
-    (cotizacion?.financ_type === "Contado"
-      ? valorLoteNumero * 0.05
-      : cotizacion?.financ_type === "Crédito BIESS"
-        ? valorLoteNumero * 0.03
-        : 0)
+  // Si una promoción que no se acumula anuló el descuento por tipo, vale 0 (no se
+  // recalcula el %) — ver lib/descuento-tipo.ts.
+  const descuentoTipo = descuentoTipoDeRegistro({
+    financType: cotizacion?.financ_type,
+    discount: cotizacion?.discount,
+    promoDiscount: cotizacion?.promo_discount,
+    cantidadPromociones: cotizacion?.promociones?.length ?? 0,
+    valorLote: valorLoteNumero,
+  }).monto
   const descuentoConDescuentoExtra =
     descuentoTipo + (Number(cotizacion?.extra_discount) || 0)
 
@@ -436,7 +439,9 @@ export function CotizacionReporteContent({ id }: { id: string }) {
                                     fila.sobrante && "bg-destructive/10 text-destructive"
                                   )}
                                 >
-                                  <td className="px-4.5 py-1.5 font-bold">{fila.mes}</td>
+                                  <td className="px-4.5 py-1.5 font-bold">
+                                    {fila.desembolso ? "Desembolso BIESS" : fila.mes}
+                                  </td>
                                   <td className="text-muted-foreground px-4.5 py-1.5">
                                     {formatearFecha(fila.fecha)}
                                   </td>

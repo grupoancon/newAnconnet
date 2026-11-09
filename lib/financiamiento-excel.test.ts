@@ -3,7 +3,11 @@
 import { describe, expect, it } from "vitest"
 
 import type { LoteInventario } from "@/lib/api/inventario-api"
-import type { FinanciamientoBackend, ProcesoBackend } from "@/lib/api/ventas-api"
+import type {
+  FinanciamientoBackend,
+  ProcesoBackend,
+  RefinanciamientoBackend,
+} from "@/lib/api/ventas-api"
 import { construirHojasFinanciamiento } from "@/lib/financiamiento-excel"
 
 const fechas = [
@@ -78,6 +82,10 @@ describe("construirHojasFinanciamiento", () => {
     expect(anexo.filas[4].slice(1, 4)).toEqual(["FECHA", "", "31 oct 2026"])
     expect(anexo.filas[6].slice(1)).toEqual(["PROYECTO", "", "PERLA VERDE - JADE"])
     expect(anexo.filas[7].slice(1)).toEqual(["INMUEBLE", "", "PV-J-148", "Mts", 625.31])
+    // DESCUENTO = 1009.63 (BIESS) + 300 (extra); TOTAL = 33954.33 − 1309.63
+    expect(anexo.filas[9].slice(1, 4)).toEqual(["DESCUENTO", "", 1309.63])
+    expect(anexo.filas[10].slice(1)).toEqual(["DESCUENTO ADICIONAL", "", 0])
+    expect(anexo.filas[11].slice(1)).toEqual(["TOTAL A FINANCIAR", "", 32644.7])
     expect(anexo.filas[13].slice(1)).toEqual([
       "FORMA DE PAGO",
       "",
@@ -225,5 +233,143 @@ describe("construirHojasFinanciamiento", () => {
     const [anexo] = construirHojasFinanciamiento(ejemploBiess()).hojas
     expect(anexo.filas).toHaveLength(27)
     expect(anexo.filas[26]).toEqual([null, ""])
+  })
+})
+
+describe("construirHojasFinanciamiento — refinanciamiento", () => {
+  // Datos del anexo G-M3-59 (Puerto Quito Garden, crédito directo, abono realizado
+  // $1.500) con 2 cuotas de ejemplo; la segunda sin interés para probar el VINT.
+  function ejemploRefinanciamiento() {
+    const ali = [{ nombre: "Alicuota", valor: 48, fechaInicio: null }]
+    const entrada = (forma: string, fecha: string, alicuota: number) => ({
+      forma_pago: forma,
+      fecha_pago: fecha,
+      abono_lote: 1000,
+      alicuotas: alicuota ? ali : [{ ...ali[0], valor: 0 }],
+      alicuota_comunal: alicuota,
+      escritura: 0,
+      total_cancelar: 1000 + alicuota,
+      observaciones: forma === "Abono inicial" ? "Pagado en caja" : null,
+    })
+    const cuota = (mes: number, fecha: string, interes: number) => ({
+      mes,
+      fecha,
+      capital: 12500,
+      interes,
+      abono: 12500 + interes,
+      alicuota: 48,
+      alicuotas: ali,
+      escritura: 0,
+      cuota: 12548 + interes,
+      saldo: 25000 - mes * 12500,
+      editado: false,
+      sobrante: false,
+      escrituraEditada: false,
+    })
+    return {
+      tipo: "refinanciamiento" as const,
+      financiamiento: {
+        id_process: 22,
+        created_at: "2026-11-09T15:00:00.000Z",
+        init_date: "2026-11-20",
+        financ_type: "Crédito directo",
+        total_financ: "25000",
+        discount: "200",
+        extra_discount: "0",
+        promo_discount: "0",
+        abono_realizado: "1500",
+        abono_capital: "0",
+        adicionales: "0",
+        ofrecimientos: null,
+        entradas: [
+          entrada("Abono inicial", "2026-11-06", 0),
+          entrada("Entrada", "2026-11-20", 48),
+          entrada("Entrada", "2026-12-20", 48),
+        ],
+        detalle: [cuota(1, "2027-01-20", 220.83), cuota(2, "2027-02-20", 0)],
+      } as unknown as RefinanciamientoBackend,
+      proceso: {
+        cli_lote: "G-M3-59",
+        lote_price: 29700,
+        lote_mts: 634.14,
+        titular: { nombre: "HERRERA HERRERA ELSA YOLANDA" },
+      } as unknown as ProcesoBackend,
+      loteInfo: {
+        codigo: "G-M3-59",
+        pvp: "29700",
+        areaUtil: "634.14",
+        proyecto: { nombre: "Puerto Quito Garden" },
+      } as unknown as LoteInventario,
+    }
+  }
+
+  it("arma la hoja Financiamiento con el título de refinanciamiento", () => {
+    const { hojas, nombreArchivo } = construirHojasFinanciamiento(
+      ejemploRefinanciamiento()
+    )
+    expect(nombreArchivo).toBe(
+      "Refinanciamiento - G-M3-59 - HERRERA HERRERA ELSA YOLANDA.xlsx"
+    )
+    const [anexo] = hojas
+    expect(anexo.nombre).toBe("Financiamiento")
+    expect(anexo.filas[2][1]).toBe("REFINANCIAMIENTO")
+    expect(anexo.filas[4].slice(1)).toEqual(["FECHA", "", "2026-11-09"])
+    expect(anexo.filas[6].slice(1)).toEqual(["PROYECTO", "", "PUERTO QUITO GARDEN"])
+    expect(anexo.filas[8].slice(1)).toEqual(["VALOR DEL LOTE", "", 29700])
+    expect(anexo.filas[9].slice(1, 4)).toEqual(["DESCUENTO", "", 200])
+    expect(anexo.filas[10].slice(1)).toEqual(["DESCUENTO ADICIONAL", "", 0])
+    // Valor del lote − todos los descuentos
+    expect(anexo.filas[11].slice(1)).toEqual(["TOTAL A FINANCIAR", "", 29500])
+    expect(anexo.filas[13].slice(1)).toEqual([
+      "FORMA DE PAGO",
+      "",
+      "FECHA",
+      "# CUOTAS",
+      "ABONO LOTE",
+      "ALICUOTA",
+      "TOTAL A CANCELAR",
+      "OBSERVACION",
+    ])
+    expect(anexo.filas[14].slice(1)).toEqual([
+      "ABONO INICIAL",
+      "",
+      "06/11/2026",
+      1,
+      1000,
+      0,
+      1000,
+      "Pagado en caja",
+    ])
+    expect(anexo.filas[17].slice(1)).toEqual(["TOTAL", "", "", "", 3000, 96, 3096])
+    expect(anexo.filas[19][1]).toBe("NUMERO MESES")
+    expect(anexo.filas[20].slice(1)).toEqual([
+      1,
+      "20/01/2027",
+      12500,
+      220.83,
+      12720.83,
+      48,
+      0,
+      12768.83,
+      12500,
+    ])
+  })
+
+  it("en SAP omite el VINT en 0 y suma el abono realizado al pago total del lote", () => {
+    const sap = construirHojasFinanciamiento(ejemploRefinanciamiento()).hojas[1]
+    expect(sap.filas.slice(1)).toEqual([
+      ["VENT", 1, "06/11/2026", 1000, "ENTRADA 1"],
+      ["VENT", 1, "20/11/2026", 1000, "ENTRADA 2"],
+      ["VALI", 1, "20/11/2026", 48, "ENTRADA 2"],
+      ["VENT", 1, "20/12/2026", 1000, "ENTRADA 3"],
+      ["VALI", 1, "20/12/2026", 48, "ENTRADA 3"],
+      ["VLOT", 1, "20/01/2027", 12500, "CUOTA 1"],
+      ["VINT", 1, "20/01/2027", 220.83, "CUOTA 1"],
+      ["VALI", 1, "20/01/2027", 48, "CUOTA 1"],
+      ["VLOT", 1, "20/02/2027", 12500, "CUOTA 2"],
+      ["VALI", 1, "20/02/2027", 48, "CUOTA 2"],
+      // 3000 entradas + 25000 capital + 220.83 interés + 1500 abono realizado
+      ["LT-G", 1, "20/02/2027", 29720.83, "Pago total lote"],
+    ])
   })
 })

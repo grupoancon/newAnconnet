@@ -1,5 +1,11 @@
 "use client"
 
+import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
+import {
+  estadoRefinanciamiento,
+  imprimeComoBorrador,
+  sePuedeImprimirRefinanciamiento,
+} from "@/lib/refinanciamiento-estado"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/lib/navigation"
 import { ArrowLeft, Plus, Printer, Trash2 } from "lucide-react"
@@ -71,6 +77,8 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
   // refinanciamiento-reporte-content.tsx.
   const idNumero = Number(id)
   const puedeAprobar = useCan("refinanciamiento:aprobar")
+  const puedeCrear = useCan("refinanciamiento:crear")
+  const puedeEditar = useCan("refinanciamiento:editar")
 
   const [proceso, setProceso] = useState<ProcesoBackend | null>(null)
   const [loteInfo, setLoteInfo] = useState<LoteInventario | null>(null)
@@ -89,7 +97,7 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
   // firmantes de CLIENTE desde los candidatos ya registrados (cónyuge, apoderado,
   // referido, clientes extra — todos vienen de la oferta del mismo proceso) o con
   // nombre libre. Todo esto es solo para esta impresión, no se guarda, y solo aplica
-  // una vez aprobado (un borrador no se firma).
+  // en el reporte final (preaprobado o aprobado; un borrador no se firma).
   const [representantesDisponibles, setRepresentantesDisponibles] = useState<
     RepresentanteConvenio[]
   >([])
@@ -236,29 +244,37 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
   // "Contado"/"Crédito BIESS" siempre llevan un descuento fijo (5%/3%, misma regla que
   // new/[id]) — si el registro quedó guardado sin el campo "discount", se recalcula
   // igual para mostrarlo.
-  const descuentoTipo =
-    Number(refinanciamiento?.discount) ||
-    (refinanciamiento?.financ_type === "Contado"
-      ? valorLoteNumero * 0.05
-      : esBiessLike(refinanciamiento?.financ_type)
-        ? valorLoteNumero * 0.03
-        : 0)
-  // "DESCUENTO" en el anexo muestra el descuento por tipo de refinanciamiento + el
-  // descuento extra juntos en una sola línea — la promoción se muestra aparte, ya que
-  // va identificada por su propio nombre.
-  const descuentoConDescuentoExtra =
-    descuentoTipo + (Number(refinanciamiento?.extra_discount) || 0)
-  // Se puede imprimir desde "ingresado" en adelante (refinanciamiento.status —
-  // a diferencia de financiamiento-imprimir-content.tsx, acá no hay
-  // proceso.finan_status del que leerlo, es directo) — antes de aprobar, el anexo
-  // sale marcado como BORRADOR (ver más abajo) para que no se confunda con la versión
-  // firmable. Solo si el usuario tiene el permiso "refinanciamiento:aprobar" — mismo
-  // criterio que habilita el botón Imprimir en el reporte. Bloqueado acá también para
-  // que entrar directo por la URL no lo salte.
-  const estadoRefinanciamiento = (refinanciamiento?.status ?? "").trim().toLowerCase()
-  const aprobado = estadoRefinanciamiento === "aprobado"
-  const listoParaImprimir = aprobado || estadoRefinanciamiento === "ingresado"
-  const puedeImprimir = listoParaImprimir && puedeAprobar
+  // Descuento por tipo tal como quedó guardado; si una promoción que no se acumula
+  // lo anuló, vale 0 y se muestra tachado (ver lib/descuento-tipo.ts).
+  const descuentoTipoInfo = descuentoTipoDeRegistro({
+    financType: refinanciamiento?.financ_type,
+    discount: refinanciamiento?.discount,
+    promoDiscount: refinanciamiento?.promo_discount,
+    cantidadPromociones: refinanciamiento?.promociones?.length ?? 0,
+    valorLote: valorLoteNumero,
+  })
+  const descuentoTipo = descuentoTipoInfo.monto
+  // "Descuento" suma TODOS los descuentos en una sola línea: el del tipo de
+  // financiamiento, el extra y el de promociones.
+  const descuentosTotales =
+    descuentoTipo +
+    (Number(refinanciamiento?.extra_discount) || 0) +
+    (Number(refinanciamiento?.promo_discount) || 0)
+  // "TOTAL A FINANCIAR" del encabezado = valor del lote − todos los descuentos.
+  const totalAFinanciar = Math.max(0, valorLoteNumero - descuentosTotales)
+  // Qué se imprime según refinanciamiento.status (lib/refinanciamiento-estado.ts):
+  // borrador → con la marca de agua BORRADOR (lo puede imprimir quien lo está
+  // armando); guardado = preaprobado, y aprobado → el reporte final, sin marca de agua
+  // y con firmas (solo con "refinanciamiento:aprobar"). Rechazado no se imprime.
+  // Bloqueado acá también para que entrar directo por la URL no lo salte.
+  const estado = estadoRefinanciamiento(refinanciamiento?.status)
+  const esBorrador = imprimeComoBorrador(estado)
+  const reporteFinal = !esBorrador
+  const listoParaImprimir = sePuedeImprimirRefinanciamiento(estado)
+  const tienePermiso = esBorrador
+    ? puedeCrear || puedeEditar || puedeAprobar
+    : puedeAprobar
+  const puedeImprimir = listoParaImprimir && tienePermiso
 
   // Candidatos disponibles para agregar como firmantes extra — solo los que tienen
   // nombre cargado (vienen de la oferta del mismo proceso, no de refinanciamiento).
@@ -361,22 +377,26 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
       ) : !listoParaImprimir ? (
         <div className="p-8">
           <EmptyState
-            title="Este refinanciamiento todavía no está listo para imprimir"
-            description="El anexo se puede imprimir una vez que el refinanciamiento fue guardado como ingresado (sale marcado como BORRADOR hasta que se apruebe)."
+            title="Este refinanciamiento no se puede imprimir"
+            description="Un refinanciamiento rechazado no se imprime. Edítalo y vuelve a guardarlo."
             dashed
           />
         </div>
-      ) : !puedeAprobar ? (
+      ) : !tienePermiso ? (
         <div className="p-8">
           <EmptyState
             title="No tienes permiso para imprimir este anexo"
-            description="Solo quienes pueden aprobar refinanciamientos pueden imprimir el anexo."
+            description={
+              esBorrador
+                ? "Necesitas permiso para crear o editar refinanciamientos para imprimir el borrador."
+                : "Solo quienes pueden aprobar refinanciamientos pueden imprimir el anexo final."
+            }
             dashed
           />
         </div>
       ) : (
         <>
-          {aprobado && (
+          {reporteFinal && (
             <div className="no-print border-border bg-card mx-auto mt-6 w-full max-w-[860px] rounded-md border p-4">
               <div className="mb-2 text-sm font-semibold">
                 Representante de la empresa (firma)
@@ -454,11 +474,11 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
             </div>
           )}
           <div className="anexo-imprimible relative mx-auto my-6 w-full max-w-[860px] bg-white p-10 text-black">
-            {!aprobado && (
+            {esBorrador && (
               <>
                 {/* Marca de agua diagonal — se repite en cada hoja al imprimir (position:
-                  fixed), para que el anexo de un refinanciamiento "ingresado" pero
-                  todavía no aprobado no se confunda con la versión firmable. Visible
+                  fixed), para que el anexo de un refinanciamiento todavía en borrador
+                  (sin guardar) no se confunda con la versión final. Visible
                   también en la vista previa de pantalla, no solo al imprimir. */}
                 <div
                   aria-hidden
@@ -469,7 +489,7 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
                   </span>
                 </div>
                 <div className="mb-5 rounded-md border-2 border-red-500 bg-red-50 p-3 text-center text-[11px] font-bold text-red-700">
-                  BORRADOR — este refinanciamiento todavía no está aprobado.
+                  BORRADOR — este refinanciamiento todavía está en edición.
                 </div>
               </>
             )}
@@ -507,7 +527,7 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
                 />
                 <Campo
                   label="TOTAL A FINANCIAR"
-                  valor={formatearNumero(saldoAFinanciar)}
+                  valor={formatearNumero(totalAFinanciar)}
                 />
                 {refinanciamiento.anual_interes && (
                   <Campo
@@ -533,16 +553,18 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
                     valor={formatearNumero(refinanciamiento.abono_capital)}
                   />
                 )}
-                {descuentoConDescuentoExtra > 0 && (
-                  <Campo
-                    label="DESCUENTO"
-                    valor={formatearNumero(descuentoConDescuentoExtra)}
-                  />
+                {descuentosTotales > 0 && (
+                  <Campo label="DESCUENTO" valor={formatearNumero(descuentosTotales)} />
                 )}
-                {Number(refinanciamiento.promo_discount) > 0 && (
+                {descuentoTipoInfo.anulado && (
                   <Campo
-                    label="DESCUENTO PROMOCIÓN"
-                    valor={formatearNumero(refinanciamiento.promo_discount)}
+                    label={`DESCUENTO ${descuentoTipoInfo.porcentaje * 100}% ${(refinanciamiento.financ_type ?? "").toUpperCase()}`}
+                    valor={
+                      <>
+                        <s>{formatearNumero(descuentoTipoInfo.montoSinPromocion)}</s> (NO
+                        APLICA CON LA PROMOCIÓN)
+                      </>
+                    }
                   />
                 )}
                 <Campo
@@ -637,7 +659,9 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
                     <tbody>
                       {cronograma.map((fila) => (
                         <tr key={fila.mes}>
-                          <Td alinear="center">{fila.mes}</Td>
+                          <Td alinear="center">
+                            {fila.desembolso ? "DESEMBOLSO BIESS" : fila.mes}
+                          </Td>
                           <Td alinear="center">{formatearFecha(fila.fecha)}</Td>
                           <Td alinear="center">{formatearNumero(fila.capital)}</Td>
                           <Td alinear="center">{formatearNumero(fila.interes)}</Td>
@@ -697,7 +721,7 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
               </div>
             )}
 
-            {aprobado && (
+            {reporteFinal && (
               <div className="mt-16 flex flex-wrap justify-between gap-6">
                 <Firma
                   nombre={apoderado ?? titular?.nombre ?? "—"}

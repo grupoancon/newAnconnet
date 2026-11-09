@@ -1,5 +1,6 @@
 "use client"
 
+import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import { useState, useEffect } from "react"
 import { useRouter } from "@/lib/navigation"
 import { ArrowLeft, Printer } from "lucide-react"
@@ -154,13 +155,15 @@ export function CotizacionImprimirContent({ id }: { id: string }) {
 
   const saldoAFinanciar =
     totalesCronograma.capital || Number(cotizacion?.total_financ ?? 0)
-  const descuentoTipo =
-    Number(cotizacion?.discount) ||
-    (cotizacion?.financ_type === "Contado"
-      ? valorLoteNumero * 0.05
-      : cotizacion?.financ_type === "Crédito BIESS"
-        ? valorLoteNumero * 0.03
-        : 0)
+  // Si una promoción que no se acumula anuló el descuento por tipo, vale 0 (no se
+  // recalcula el %) — ver lib/descuento-tipo.ts.
+  const descuentoTipo = descuentoTipoDeRegistro({
+    financType: cotizacion?.financ_type,
+    discount: cotizacion?.discount,
+    promoDiscount: cotizacion?.promo_discount,
+    cantidadPromociones: cotizacion?.promociones?.length ?? 0,
+    valorLote: valorLoteNumero,
+  }).monto
   const descuentoConDescuentoExtra =
     descuentoTipo + (Number(cotizacion?.extra_discount) || 0)
 
@@ -336,7 +339,9 @@ export function CotizacionImprimirContent({ id }: { id: string }) {
                   <tbody>
                     {cronograma.map((fila) => (
                       <tr key={fila.mes}>
-                        <Td alinear="center">{fila.mes}</Td>
+                        <Td alinear="center">
+                          {fila.desembolso ? "DESEMBOLSO BIESS" : fila.mes}
+                        </Td>
                         <Td alinear="center">{formatearFecha(fila.fecha)}</Td>
                         <Td alinear="center">{formatearNumero(fila.capital)}</Td>
                         <Td alinear="center">{formatearNumero(fila.interes)}</Td>

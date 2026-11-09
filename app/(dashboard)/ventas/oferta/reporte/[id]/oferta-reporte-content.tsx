@@ -38,6 +38,7 @@ import {
   type ProcesoBackend,
 } from "@/lib/api/ventas-api"
 import { separarTelefono } from "@/lib/const/codigos-telefonicos"
+import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import { cn } from "@/lib/utils"
 
 function formatearPrecio(valor: string | number | null | undefined): string {
@@ -202,15 +203,20 @@ export function OfertaReporteContent({ id }: { id: string }) {
   // para que los dos reportes siempre muestren la misma cifra. Si el proceso todavía no
   // tiene financiamiento, se muestra "—" en vez de intentar calcular nada.
   const valorLoteNumero = Number(loteInfo?.pvp ?? proceso?.lote_price ?? 0)
-  const descuentoTipo =
-    Number(financiamiento?.discount) ||
-    (financiamiento?.financ_type === "Contado"
-      ? valorLoteNumero * 0.05
-      : financiamiento?.financ_type === "Crédito BIESS"
-        ? valorLoteNumero * 0.03
-        : 0)
+  // "Descuento" = TODOS los descuentos del financiamiento: el del tipo (5% Contado,
+  // 3% BIESS, o 0 si una promoción que no se acumula lo anuló — lib/descuento-tipo.ts),
+  // el extra y el de promociones.
+  const descuentoTipo = descuentoTipoDeRegistro({
+    financType: financiamiento?.financ_type,
+    discount: financiamiento?.discount,
+    promoDiscount: financiamiento?.promo_discount,
+    cantidadPromociones: financiamiento?.promociones?.length ?? 0,
+    valorLote: valorLoteNumero,
+  }).monto
   const descuentoFinanciamiento = financiamiento
-    ? descuentoTipo + (Number(financiamiento.extra_discount) || 0)
+    ? descuentoTipo +
+      (Number(financiamiento.extra_discount) || 0) +
+      (Number(financiamiento.promo_discount) || 0)
     : null
 
   const secciones = useMemo<Array<{ titulo: string; campos: CampoReporte[] }>>(() => {

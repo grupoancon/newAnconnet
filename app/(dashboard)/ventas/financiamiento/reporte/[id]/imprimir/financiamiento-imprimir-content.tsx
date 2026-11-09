@@ -1,5 +1,6 @@
 "use client"
 
+import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/lib/navigation"
 import { ArrowLeft, Plus, Printer, Trash2 } from "lucide-react"
@@ -224,18 +225,24 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
   // "Contado"/"Crédito BIESS" siempre llevan un descuento fijo (5%/3%, misma regla que
   // new/[id]) — si el registro quedó guardado sin el campo "discount", se recalcula
   // igual para mostrarlo.
-  const descuentoTipo =
-    Number(financiamiento?.discount) ||
-    (financiamiento?.financ_type === "Contado"
-      ? valorLoteNumero * 0.05
-      : financiamiento?.financ_type === "Crédito BIESS"
-        ? valorLoteNumero * 0.03
-        : 0)
-  // "DESCUENTO" en el anexo muestra el descuento por tipo de financiamiento + el
-  // descuento extra juntos en una sola línea — la promoción se muestra aparte, ya que
-  // va identificada por su propio nombre.
-  const descuentoConDescuentoExtra =
-    descuentoTipo + (Number(financiamiento?.extra_discount) || 0)
+  // Descuento por tipo tal como quedó guardado; si una promoción que no se acumula
+  // lo anuló, vale 0 y se muestra tachado (ver lib/descuento-tipo.ts).
+  const descuentoTipoInfo = descuentoTipoDeRegistro({
+    financType: financiamiento?.financ_type,
+    discount: financiamiento?.discount,
+    promoDiscount: financiamiento?.promo_discount,
+    cantidadPromociones: financiamiento?.promociones?.length ?? 0,
+    valorLote: valorLoteNumero,
+  })
+  const descuentoTipo = descuentoTipoInfo.monto
+  // "Descuento" suma TODOS los descuentos en una sola línea: el del tipo de
+  // financiamiento, el extra y el de promociones.
+  const descuentosTotales =
+    descuentoTipo +
+    (Number(financiamiento?.extra_discount) || 0) +
+    (Number(financiamiento?.promo_discount) || 0)
+  // "TOTAL A FINANCIAR" del encabezado = valor del lote − todos los descuentos.
+  const totalAFinanciar = Math.max(0, valorLoteNumero - descuentosTotales)
   // Se puede imprimir desde "ingresado" en adelante (proceso.finan_status, mismo
   // campo que gobierna el botón Aprobar en el reporte) — antes de aprobar, el anexo
   // sale marcado como BORRADOR (ver más abajo) para que no se confunda con la versión
@@ -491,18 +498,20 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                 />
                 <Campo
                   label="TOTAL A FINANCIAR"
-                  valor={formatearNumero(saldoAFinanciar)}
+                  valor={formatearNumero(totalAFinanciar)}
                 />
-                {descuentoConDescuentoExtra > 0 && (
-                  <Campo
-                    label="DESCUENTO"
-                    valor={formatearNumero(descuentoConDescuentoExtra)}
-                  />
+                {descuentosTotales > 0 && (
+                  <Campo label="DESCUENTO" valor={formatearNumero(descuentosTotales)} />
                 )}
-                {Number(financiamiento.promo_discount) > 0 && (
+                {descuentoTipoInfo.anulado && (
                   <Campo
-                    label="DESCUENTO POR PROMOCIÓN"
-                    valor={formatearNumero(financiamiento.promo_discount)}
+                    label={`DESCUENTO ${descuentoTipoInfo.porcentaje * 100}% ${(financiamiento.financ_type ?? "").toUpperCase()}`}
+                    valor={
+                      <>
+                        <s>{formatearNumero(descuentoTipoInfo.montoSinPromocion)}</s> (NO
+                        APLICA CON LA PROMOCIÓN)
+                      </>
+                    }
                   />
                 )}
                 <Campo
@@ -597,7 +606,9 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                     <tbody>
                       {cronograma.map((fila) => (
                         <tr key={fila.mes}>
-                          <Td alinear="center">{fila.mes}</Td>
+                          <Td alinear="center">
+                            {fila.desembolso ? "DESEMBOLSO BIESS" : fila.mes}
+                          </Td>
                           <Td alinear="center">{formatearFecha(fila.fecha)}</Td>
                           <Td alinear="center">{formatearNumero(fila.capital)}</Td>
                           <Td alinear="center">{formatearNumero(fila.interes)}</Td>
