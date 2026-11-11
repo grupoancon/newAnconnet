@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils"
+import { EtiquetaCampo } from "@/components/shared/etiqueta-campo"
 
 export function TextField({
   label,
@@ -8,6 +9,7 @@ export function TextField({
   type = "text",
   error,
   disabled,
+  hint,
 }: {
   label?: string
   placeholder?: string
@@ -16,12 +18,14 @@ export function TextField({
   type?: string
   error?: string | null
   disabled?: boolean
+  // Nota gris debajo del campo (no se muestra si hay error).
+  hint?: string
 }) {
   return (
     <div className="min-w-0">
       {label ? (
         <label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
-          {label}
+          <EtiquetaCampo>{label}</EtiquetaCampo>
         </label>
       ) : null}
       <input
@@ -35,6 +39,9 @@ export function TextField({
           error && "border-destructive focus:border-destructive"
         )}
       />
+      {!error && hint ? (
+        <p className="text-muted-foreground mt-1.5 text-xs">{hint}</p>
+      ) : null}
       {error ? (
         <p className="text-destructive mt-1.5 text-xs font-medium">{error}</p>
       ) : null}

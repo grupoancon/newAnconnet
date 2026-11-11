@@ -688,6 +688,8 @@ export type OfertaFormInput = Partial<
   Omit<OfertaBackend, "id" | "cli_state" | "created_at">
 > & {
   finalizar?: boolean
+  // Con finalizar: se guardó con campos obligatorios sin completar → "incompleto".
+  incompleta?: boolean
 }
 
 // GET /ventas/procesos/:idProceso/oferta — null si el proceso todavia no tiene oferta

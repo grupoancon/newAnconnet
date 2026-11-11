@@ -1,5 +1,6 @@
 "use client"
 
+import { esTipoContado } from "@/lib/tipos-financiamiento"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/lib/navigation"
 import { ArrowLeft, CheckCircle2, FileSpreadsheet, Pencil, Printer } from "lucide-react"
@@ -434,7 +435,7 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                             }
                           >
                             <td className="px-4.5 py-1.75 font-sans">
-                              {(financiamiento.financ_type === "Contado" ||
+                              {(esTipoContado(financiamiento.financ_type ?? "") ||
                                 financiamiento.financ_type === "Crédito BIESS") &&
                               fila.forma_pago === "Entrada"
                                 ? "Cuota"
@@ -511,7 +512,7 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                   </div>
                 </div>
 
-                {financiamiento.financ_type !== "Contado" &&
+                {!esTipoContado(financiamiento.financ_type ?? "") &&
                   financiamiento.financ_type !== "Crédito BIESS" && (
                     <>
                       <SeccionTitulo texto="Cronograma de amortización" />

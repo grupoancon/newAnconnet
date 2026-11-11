@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "@/lib/navigation"
 import {
   ArrowLeft,
@@ -43,6 +43,7 @@ import { useSession } from "@/components/shared/session-provider"
 import { useToast } from "@/components/shared/toast-provider"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { cn } from "@/lib/utils"
 import {
   InventarioApiError,
   obtenerLote,
@@ -72,7 +73,17 @@ import {
 } from "@/lib/api/ventas-api"
 import { useBorradorAutomatico } from "@/lib/borradores/use-borrador-automatico"
 import { nacionalidades } from "@/lib/const/nacionalidades"
-import { actividades, cargos } from "@/lib/const/actividades"
+import { actividades } from "@/lib/const/actividades"
+import {
+  CARGO_OTRO,
+  CARGOS_NIVELES,
+  OPCIONES_PROFESIONES,
+  requiereEspecificarProfesion,
+  separarCargo,
+  separarProfesion,
+  unirCargo,
+  unirProfesion,
+} from "@/lib/const/profesiones"
 import { separarTelefono } from "@/lib/const/codigos-telefonicos"
 import { validarEmail } from "@/lib/validations/email"
 import { validarIdentificacion } from "@/lib/validations/identificacion"
@@ -98,9 +109,11 @@ const OPCIONES_NACIONALIDAD: ComboboxOption[] = Array.from(
 
 const NO_APLICA = "No aplica"
 
-// Actividad "OTRO": despliega los datos de quien efectúa la transacción (sección 3 del
-// formulario UAFE).
+// Actividad "OTRO" de ofertas viejas: ya no está en la lista — ahora es el check "Otra
+// persona realizará la transacción" (cli_transTerceros), que despliega los datos de quien
+// efectúa la transacción (sección 3 del formulario UAFE).
 const ACTIVIDAD_OTRO = "OTRO"
+const SI = "Sí"
 
 // Paso "Licitud de Fondos" — respuesta de cada pregunta de relación con el gobierno.
 const SI_NO_OPCIONES = ["Sí", "No"]
@@ -111,8 +124,6 @@ const ESTADO_CIVIL_CASADO = "CASADO/A"
 const OPCIONES_ACTIVIDADES: ComboboxOption[] = Array.from(
   new Set(actividades.map((n) => n.nombre))
 ).map((nombre) => ({ value: nombre, label: nombre }))
-
-const CARGOS_OPCIONES = Array.from(new Set(cargos.map((n) => n.value)))
 
 type CampoFormulario =
   | "cli_tipoOperacion"
@@ -156,7 +167,11 @@ type CampoFormulario =
   | "cli_trabActividad"
   | "cli_trabEmpresa"
   | "cli_trabProfesion"
+  // Solo en el formulario: texto de "Otra profesión / Otra ingeniería — especificar".
+  | "cli_trabProfesionOtro"
   | "cli_trabCargo"
+  // Solo en el formulario: texto de "Otro nivel — especificar".
+  | "cli_trabCargoOtro"
   | "cli_trabTiempo"
   | "cli_trabSector"
   | "cli_trabDireccion"
@@ -164,6 +179,8 @@ type CampoFormulario =
   | "cli_trabIngresos"
   | "cli_trabRuc"
   | "cli_trabTipoNegocio"
+  // Solo en el formulario: "Sí" si otra persona realizará la transacción.
+  | "cli_transTerceros"
   | "cli_transNombre"
   | "cli_transID"
   | "cli_transNacionalidad"
@@ -256,7 +273,9 @@ const FORM_VACIO: Record<CampoFormulario, string> = {
   cli_trabActividad: "",
   cli_trabEmpresa: "",
   cli_trabProfesion: "",
+  cli_trabProfesionOtro: "",
   cli_trabCargo: "",
+  cli_trabCargoOtro: "",
   cli_trabTiempo: "",
   cli_trabSector: "",
   cli_trabDireccion: "",
@@ -264,6 +283,7 @@ const FORM_VACIO: Record<CampoFormulario, string> = {
   cli_trabIngresos: "",
   cli_trabRuc: "",
   cli_trabTipoNegocio: "",
+  cli_transTerceros: "",
   cli_transNombre: "",
   cli_transID: "",
   cli_transNacionalidad: "",
@@ -312,6 +332,18 @@ type PasoOferta = {
 // está en el catálogo, se agrega a las opciones para que el select no quede en blanco.
 function opcionesCon(opciones: string[], actual: string | null | undefined): string[] {
   return actual && !opciones.includes(actual) ? [...opciones, actual] : opciones
+}
+
+// Fuente de patrimonio guardada → opción del select + texto de "Otro". Lo que no está
+// en la lista (lo escrito en "Otro") se carga como "Otro" con ese texto.
+function separarFuentePatrimonio(guardado: string | null | undefined): {
+  fuentePatrimonio: string
+  fuentePatrimonioOtro: string
+} {
+  const valor = (guardado ?? "").trim()
+  if (!valor || FUENTES_INGRESOS.includes(valor))
+    return { fuentePatrimonio: valor, fuentePatrimonioOtro: "" }
+  return { fuentePatrimonio: "Otro", fuentePatrimonioOtro: valor }
 }
 
 function formatearPrecio(valor: string | number | null | undefined): string {
@@ -372,6 +404,10 @@ export function OfertaCompraContent({ id }: { id: string }) {
   const [cargando, setCargando] = useState(true)
   const usuarioActual = useSession()
   const nombreUsuarioActual = usuarioActual.nombre
+  // Teléfono del asesor principal ya consultado — el borrador recuperado no lo pisa.
+  const telefonoAsesorPrincipalRef = useRef<{ numero: string; prefijo: string } | null>(
+    null
+  )
   const [error, setError] = useState<string | null>(null)
   const [paso, setPaso] = useState(0)
   const [guardando, setGuardando] = useState(false)
@@ -392,6 +428,9 @@ export function OfertaCompraContent({ id }: { id: string }) {
     fuenteIngresosOtro: "",
     patrimonio: "",
     fuentePatrimonio: "",
+    // Solo en el formulario: texto de "Otro". No tiene columna propia — al guardar, lo
+    // escrito va directo en fuentePatrimonio (ver separarFuentePatrimonio).
+    fuentePatrimonioOtro: "",
     ingresoMensual: "",
     gastosMensual: "",
     ahorroActual: "",
@@ -481,7 +520,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
               financierosExistentes.patrimonio != null
                 ? String(financierosExistentes.patrimonio)
                 : "",
-            fuentePatrimonio: financierosExistentes.fuentePatrimonio ?? "",
+            ...separarFuentePatrimonio(financierosExistentes.fuentePatrimonio),
             ingresoMensual:
               financierosExistentes.ingresoMensual != null
                 ? String(financierosExistentes.ingresoMensual)
@@ -584,10 +623,22 @@ export function OfertaCompraContent({ id }: { id: string }) {
                 ? ofertaExistente.cli_sector
                 : "",
             cli_direccion: ofertaExistente.cli_direccion ?? "",
-            cli_trabActividad: ofertaExistente.cli_trabActividad ?? "",
+            cli_trabActividad:
+              ofertaExistente.cli_trabActividad === ACTIVIDAD_OTRO
+                ? ""
+                : (ofertaExistente.cli_trabActividad ?? ""),
+            cli_transTerceros:
+              ofertaExistente.cli_trabActividad === ACTIVIDAD_OTRO ||
+              ofertaExistente.cli_transNombre
+                ? SI
+                : "",
             cli_trabEmpresa: ofertaExistente.cli_trabEmpresa ?? "",
-            cli_trabProfesion: ofertaExistente.cli_trabProfesion ?? "",
-            cli_trabCargo: ofertaExistente.cli_trabCargo ?? "",
+            cli_trabProfesion: separarProfesion(ofertaExistente.cli_trabProfesion)
+              .profesion,
+            cli_trabProfesionOtro: separarProfesion(ofertaExistente.cli_trabProfesion)
+              .otro,
+            cli_trabCargo: separarCargo(ofertaExistente.cli_trabCargo).cargo,
+            cli_trabCargoOtro: separarCargo(ofertaExistente.cli_trabCargo).otro,
             cli_trabTiempo: ofertaExistente.cli_trabTiempo ?? "",
             cli_trabSector: ofertaExistente.cli_trabSector ?? "",
             cli_trabDireccion: ofertaExistente.cli_trabDireccion ?? "",
@@ -614,31 +665,28 @@ export function OfertaCompraContent({ id }: { id: string }) {
           })
         }
 
-        // Si la oferta todavía no tiene "Teléfono del asesor", se precarga con el del
-        // primer asesor del proceso (cli_asesor guarda los nombres separados por coma,
-        // en el orden en que se eligieron). Si el proceso no tiene asesor guardado, se
-        // usa el del usuario que está llenando la oferta (por lo general es el mismo
-        // asesor). Solo rellena si el campo sigue vacío, y si falla la consulta el
-        // asesor lo escribe a mano como antes.
+        // "Teléfono del asesor" = el del asesor principal: el primero del proceso
+        // (cli_asesor guarda los nombres separados por coma, en el orden en que se
+        // eligieron), o el usuario que llena la oferta si el proceso no tiene asesor.
+        // Reemplaza lo que hubiera guardado en la oferta o en el borrador. Si ese
+        // usuario no tiene teléfono cargado (o falla la consulta), queda lo guardado y
+        // el asesor lo puede escribir a mano.
         const primerAsesor =
           (procesoData.cli_asesor ?? "").split(",")[0]?.trim() ||
           nombreUsuarioActual.trim()
-        if (!ofertaExistente?.cli_asesorTelf && primerAsesor) {
+        if (primerAsesor) {
           const { telefono } = await obtenerTelefonoAsesor(primerAsesor).catch(() => ({
             telefono: null,
           }))
           if (cancelado) return
           if (telefono) {
             const tel = separarTelefono(telefono)
-            setForm((actual) =>
-              actual.cli_asesorTelf
-                ? actual
-                : {
-                    ...actual,
-                    cli_asesorTelf: tel.numero,
-                    cli_asesorTelf_prefijo: tel.prefijo,
-                  }
-            )
+            telefonoAsesorPrincipalRef.current = tel
+            setForm((actual) => ({
+              ...actual,
+              cli_asesorTelf: tel.numero,
+              cli_asesorTelf_prefijo: tel.prefijo,
+            }))
           }
         }
       } catch (err) {
@@ -659,25 +707,19 @@ export function OfertaCompraContent({ id }: { id: string }) {
     }
   }, [idNumero, nombreUsuarioActual])
 
+  // La lista se pide una sola vez. (Antes `cargandoPersonas` estaba en las
+  // dependencias: al ponerse en true el efecto se volvía a correr, su limpieza
+  // cancelaba la consulta en curso y la lista se quedaba en "Cargando…" para siempre.)
+  const personasPedidasRef = useRef(false)
   useEffect(() => {
-    if (form.cli_contac !== "CLIENTE" || personasProceso !== null || cargandoPersonas)
-      return
-    let cancelado = false
+    if (form.cli_contac !== "CLIENTE" || personasPedidasRef.current) return
+    personasPedidasRef.current = true
     setCargandoPersonas(true)
     listarPersonasProceso()
-      .then((datos) => {
-        if (!cancelado) setPersonasProceso(datos)
-      })
-      .catch(() => {
-        if (!cancelado) setPersonasProceso([])
-      })
-      .finally(() => {
-        if (!cancelado) setCargandoPersonas(false)
-      })
-    return () => {
-      cancelado = true
-    }
-  }, [form.cli_contac, personasProceso, cargandoPersonas])
+      .then((datos) => setPersonasProceso(datos))
+      .catch(() => setPersonasProceso([]))
+      .finally(() => setCargandoPersonas(false))
+  }, [form.cli_contac])
 
   // --- Borrador automático (ver useBorradorAutomatico) ---
   // Todo lo que el asesor va llenando, en todos los pasos, se guarda solo mientras
@@ -719,7 +761,12 @@ export function OfertaCompraContent({ id }: { id: string }) {
       // trae vacío — en ese caso se conserva el precargado en vez de borrarlo.
       setForm((actual) => {
         const restaurado = { ...FORM_VACIO, ...recuperado.form }
-        if (!restaurado.cli_asesorTelf && actual.cli_asesorTelf) {
+        // El teléfono del asesor principal manda sobre lo que traiga el borrador.
+        const principal = telefonoAsesorPrincipalRef.current
+        if (principal) {
+          restaurado.cli_asesorTelf = principal.numero
+          restaurado.cli_asesorTelf_prefijo = principal.prefijo
+        } else if (!restaurado.cli_asesorTelf && actual.cli_asesorTelf) {
           restaurado.cli_asesorTelf = actual.cli_asesorTelf
           restaurado.cli_asesorTelf_prefijo = actual.cli_asesorTelf_prefijo
         }
@@ -809,6 +856,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
       cli_trabActividad: nuevaActividad,
       cli_trabEmpresa: "",
       cli_trabCargo: "",
+      cli_trabCargoOtro: "",
       cli_trabTiempo: "",
       cli_trabSector: "",
       cli_trabDireccion: "",
@@ -966,7 +1014,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
         iconBg: "bg-status-bloqueado-bg",
         iconColor: "text-status-bloqueado-fg",
         titulo: "Licitud de Fondos",
-        subtitulo: "Opcional — relación con el gobierno y declaración de fondos",
+        subtitulo: "Relación con el gobierno y declaración de fondos",
         campos: [],
       },
       {
@@ -1107,18 +1155,30 @@ export function OfertaCompraContent({ id }: { id: string }) {
             label: "Nombre del asesor",
             value: proceso.cli_asesor ?? "—",
           },
+          // No editable: siempre es el teléfono del asesor principal, que sale de su
+          // usuario (ver la carga más arriba).
           {
-            tipo: "texto",
+            tipo: "bloqueado",
             label: "Teléfono del asesor",
-            campo: "cli_asesorTelf",
-            requerido: true,
+            value: form.cli_asesorTelf
+              ? `${form.cli_asesorTelf_prefijo} ${form.cli_asesorTelf}`
+              : "—",
+            mono: true,
           },
         ],
       }
     )
 
     return lista
-  }, [proceso, loteInfo, titular, requiereConyuge, hayApoderado])
+  }, [
+    proceso,
+    loteInfo,
+    titular,
+    requiereConyuge,
+    hayApoderado,
+    form.cli_asesorTelf,
+    form.cli_asesorTelf_prefijo,
+  ])
 
   // Un borrador recuperado puede traer un paso que ya no existe (ej. el paso del
   // cónyuge depende de los datos) — se lleva al último disponible.
@@ -1205,48 +1265,48 @@ export function OfertaCompraContent({ id }: { id: string }) {
     setLicitudFondos((anterior) => ({ ...anterior, [campo]: valor }))
   }
 
-  // Un paso está completo cuando todos sus campos marcados "requerido" tienen valor —
-  // Referidos no marca ninguno, así que siempre queda completo; Apoderado solo exige la
-  // identificación cuando se cargó el nombre (ver hayApoderado). País/Ciudad/Provincia-Estado/Sector del paso Cliente, Parentesco del
-  // paso Referencias y Actividad/campos condicionales del paso Trabajo se renderizan
-  // aparte (no viven en el array `campos`), así que su obligatoriedad se valida acá
+  // Campos obligatorios que le faltan a un paso (vacíos o con formato inválido) —
+  // Referidos no marca ninguno; Apoderado solo exige la identificación cuando se cargó
+  // el nombre (ver hayApoderado). País/Ciudad/Provincia-Estado/Sector del paso Cliente,
+  // Parentesco del paso Referencias y Actividad/campos condicionales del paso Trabajo se
+  // renderizan aparte (no viven en el array `campos`), así que se revisan acá
   // directamente en vez de con la bandera `requerido`.
-  function pasoCompleto(p: PasoOferta): boolean {
-    const faltaAlgunCampo = p.campos.some(
-      (campo) => campo.tipo !== "bloqueado" && campo.requerido && !form[campo.campo]
-    )
-    if (faltaAlgunCampo) return false
-    const identificacionInvalida = p.campos.some(
-      (campo) =>
-        campo.tipo !== "bloqueado" &&
-        CAMPOS_IDENTIFICACION.has(campo.campo) &&
-        Boolean(validarIdentificacion(form[campo.campo]))
-    )
-    if (identificacionInvalida) return false
-    const emailInvalido = p.campos.some(
-      (campo) =>
-        campo.tipo !== "bloqueado" &&
-        CAMPOS_EMAIL.has(campo.campo) &&
-        Boolean(validarEmail(form[campo.campo]))
-    )
-    if (emailInvalido) return false
-    const telefonoInvalido = p.campos.some(
-      (campo) =>
-        campo.tipo !== "bloqueado" &&
-        campo.campo in CAMPOS_TELEFONO &&
-        Boolean(validarTelefono(form[campo.campo]))
-    )
-    if (telefonoInvalido) return false
+  //
+  // Un paso con algo faltante no deja avanzar ("Siguiente" deshabilitado) y la oferta
+  // solo se puede guardar con todos los pasos completos.
+  function faltantesDePaso(p: PasoOferta): string[] {
+    const faltan: string[] = []
+    const falta = (condicion: unknown, etiqueta: string) => {
+      if (condicion) faltan.push(etiqueta)
+    }
+    for (const campo of p.campos) {
+      if (campo.tipo === "bloqueado") continue
+      const valor = form[campo.campo]
+      if (campo.requerido && !valor) {
+        faltan.push(campo.label)
+        continue
+      }
+      if (CAMPOS_IDENTIFICACION.has(campo.campo) && validarIdentificacion(valor)) {
+        faltan.push(`${campo.label} (inválida)`)
+      } else if (CAMPOS_EMAIL.has(campo.campo) && validarEmail(valor)) {
+        faltan.push(`${campo.label} (inválido)`)
+      } else if (campo.campo in CAMPOS_TELEFONO && validarTelefono(valor)) {
+        faltan.push(`${campo.label} (inválido)`)
+      }
+    }
     if (p.label === "Inmueble") {
-      if (form.cli_tipoOperacion === "Otro" && !form.cli_tipoOperacionOtro.trim())
-        return false
+      falta(
+        form.cli_tipoOperacion === "Otro" && !form.cli_tipoOperacionOtro.trim(),
+        "Especifique el tipo de operación"
+      )
     }
     if (p.label === "Cliente") {
-      if (!form.cli_pais || !form.cli_ciudad) return false
-      if (provinciaEstadoAplica && !form.cli_provin) return false
-      if (esQuito && !form.cli_sector) return false
-      if (!form.cli_direccion.trim()) return false
-      if (
+      falta(!form.cli_pais, "País")
+      falta(!form.cli_ciudad, "Ciudad")
+      falta(provinciaEstadoAplica && !form.cli_provin, "Provincia / Estado")
+      falta(esQuito && !form.cli_sector, "Sector")
+      falta(!form.cli_direccion.trim(), "Dirección del hogar")
+      falta(
         clientesExtra.some(
           (cliente) =>
             !cliente.nombre ||
@@ -1254,101 +1314,132 @@ export function OfertaCompraContent({ id }: { id: string }) {
             validarIdentificacion(cliente.identificacion) ||
             !cliente.relacion.trim() ||
             !cliente.pais_residencia
-        )
+        ),
+        "Datos de los clientes adicionales"
       )
-        return false
     }
     if (p.label === "Trabajo") {
-      if (!form.cli_trabActividad) return false
-      if (!form.cli_trabProfesion) return false
+      falta(!form.cli_trabActividad, "Actividad")
+      falta(!form.cli_trabProfesion, "Profesión / Ocupación")
+      falta(
+        requiereEspecificarProfesion(form.cli_trabProfesion) &&
+          !form.cli_trabProfesionOtro.trim(),
+        "Especifique la profesión"
+      )
       const esDependiente =
         form.cli_trabActividad === "DEPENDIENTE" || form.cli_trabActividad === "EMPLEADO"
       const esIndependiente =
         form.cli_trabActividad === "INDEPENDIENTE" ||
         form.cli_trabActividad === "COMERCIANTE"
       const esRemesas = form.cli_trabActividad === "REMESAS DEL EXTERIOR"
-      if (
-        esDependiente &&
-        (!form.cli_trabEmpresa ||
-          !form.cli_trabCargo ||
-          !form.cli_trabTiempo ||
-          !form.cli_trabSector ||
-          !form.cli_trabDireccion ||
-          !form.cli_trabTelefono ||
-          Boolean(validarTelefono(form.cli_trabTelefono)))
-      )
-        return false
-      if (
-        esIndependiente &&
-        (!form.cli_trabTipoNegocio ||
-          !form.cli_trabRuc ||
-          !form.cli_trabIngresos ||
-          !form.cli_trabTiempo)
-      )
-        return false
-      if (esRemesas && (!form.cli_trabRuc || !form.cli_trabIngresos)) return false
-      if (form.cli_trabActividad === ACTIVIDAD_OTRO) {
-        if (
-          !form.cli_transNombre.trim() ||
-          !form.cli_transID ||
-          Boolean(validarIdentificacion(form.cli_transID)) ||
-          !form.cli_transNacionalidad ||
-          !form.cli_transProfesion.trim() ||
-          !form.cli_transCargo.trim() ||
-          !form.cli_transTelefono ||
-          Boolean(validarTelefono(form.cli_transTelefono)) ||
-          !form.cli_transDireccion.trim() ||
-          !form.cli_transCiudad.trim() ||
-          !form.cli_transEstadoCivil
+      if (esDependiente) {
+        falta(!form.cli_trabEmpresa, "Empresa donde trabaja")
+        falta(!form.cli_trabCargo, "Cargo / Puesto")
+        falta(
+          form.cli_trabCargo === CARGO_OTRO && !form.cli_trabCargoOtro.trim(),
+          "Especifique el cargo"
         )
-          return false
-        if (form.cli_transIntermediario === "Sí" && !form.cli_transRelacionDueno.trim())
-          return false
+        falta(!form.cli_trabTiempo, "Antigüedad de relación (años)")
+        falta(!form.cli_trabSector, "Sector (trabajo)")
+        falta(!form.cli_trabDireccion, "Dirección del trabajo")
+        falta(!form.cli_trabTelefono, "Teléfono del trabajo")
+        falta(
+          form.cli_trabTelefono && validarTelefono(form.cli_trabTelefono),
+          "Teléfono del trabajo (inválido)"
+        )
+      }
+      if (esIndependiente) {
+        falta(!form.cli_trabTipoNegocio, "Nombre del negocio")
+        falta(!form.cli_trabRuc, "RUC / RISE")
+        falta(!form.cli_trabIngresos, "Ingresos mensuales aproximados")
+        falta(!form.cli_trabTiempo, "Antigüedad de relación (años)")
+      }
+      if (esRemesas) {
+        falta(!form.cli_trabRuc, "Nombre de quien envía dinero")
+        falta(!form.cli_trabIngresos, "Relación con quien envía dinero")
+      }
+      if (form.cli_transTerceros === SI) {
+        falta(!form.cli_transNombre.trim(), "Nombre (transacción por terceros)")
+        falta(
+          !form.cli_transID || validarIdentificacion(form.cli_transID),
+          "Identificación (transacción por terceros)"
+        )
+        falta(!form.cli_transNacionalidad, "Nacionalidad (transacción por terceros)")
+        falta(!form.cli_transProfesion.trim(), "Profesión (transacción por terceros)")
+        falta(!form.cli_transCargo.trim(), "Cargo (transacción por terceros)")
+        falta(
+          !form.cli_transTelefono || validarTelefono(form.cli_transTelefono),
+          "Teléfono (transacción por terceros)"
+        )
+        falta(!form.cli_transDireccion.trim(), "Dirección (transacción por terceros)")
+        falta(!form.cli_transCiudad.trim(), "Ciudad (transacción por terceros)")
+        falta(!form.cli_transEstadoCivil, "Estado civil (transacción por terceros)")
+        falta(
+          form.cli_transIntermediario === "Sí" && !form.cli_transRelacionDueno.trim(),
+          "Relación con el dueño de los fondos"
+        )
       }
     }
     if (p.label === "Referencias") {
-      if (!form.cli_paren1 || !form.cli_paren2) return false
+      falta(!form.cli_paren1, "Parentesco — referencia 1")
+      falta(!form.cli_paren2, "Parentesco — referencia 2")
     }
     if (p.label === "Datos financieros") {
-      if (
-        !datosFinancieros.fuenteIngresos ||
-        !datosFinancieros.patrimonio ||
-        !datosFinancieros.fuentePatrimonio ||
-        !datosFinancieros.ingresoMensual ||
-        !datosFinancieros.gastosMensual ||
-        !datosFinancieros.ahorroActual
-      )
-        return false
-      if (
+      falta(!datosFinancieros.fuenteIngresos, "Fuente de ingresos")
+      falta(
         datosFinancieros.fuenteIngresos === "Otro" &&
-        !(datosFinancieros.fuenteIngresosOtro ?? "").trim()
+          !(datosFinancieros.fuenteIngresosOtro ?? "").trim(),
+        "Especifique la fuente"
       )
-        return false
+      falta(!datosFinancieros.ingresoMensual, "Ingresos mensuales")
+      falta(!datosFinancieros.gastosMensual, "Gastos mensuales")
+      falta(!datosFinancieros.ahorroActual, "Ahorro actual")
+      falta(!datosFinancieros.patrimonio, "Patrimonio aproximado")
+      falta(!datosFinancieros.fuentePatrimonio, "Fuente de patrimonio")
+      falta(
+        datosFinancieros.fuentePatrimonio === "Otro" &&
+          !(datosFinancieros.fuentePatrimonioOtro ?? "").trim(),
+        "Especifique la fuente del patrimonio"
+      )
     }
     if (p.label === "Licitud de Fondos") {
-      if (
-        hayPep &&
-        (!licitudFondos.pepCargo.trim() ||
-          !licitudFondos.pepPais ||
-          !licitudFondos.pepFechaInicio ||
-          !licitudFondos.pepRelacion.trim())
+      falta(!licitudFondos.funcionarioElecto, "¿Es o ha sido funcionario público?")
+      falta(
+        !licitudFondos.relacionGobierno,
+        "¿Relación con algún funcionario o entidad de gobierno?"
       )
-        return false
-      if (
-        hayPep &&
+      falta(
+        !licitudFondos.trabajoSectorPublico,
+        "¿Trabajos o contratos con el sector público?"
+      )
+      falta(!licitudFondos.fondosOrigen.trim(), "¿De dónde provienen los fondos?")
+      falta(!licitudFondos.fondosDestino.trim(), "¿Para qué serán utilizados los fondos?")
+    }
+    if (p.label === "Licitud de Fondos" && hayPep) {
+      falta(!licitudFondos.pepCargo.trim(), "Cargo / Función PEP")
+      falta(!licitudFondos.pepPais, "País (PEP)")
+      falta(!licitudFondos.pepFechaInicio, "Fecha de inicio (PEP)")
+      falta(!licitudFondos.pepRelacion.trim(), "Relación con el cliente (PEP)")
+      falta(
         licitudFondos.pepFechaFin &&
-        licitudFondos.pepFechaFin < licitudFondos.pepFechaInicio
+          licitudFondos.pepFechaFin < licitudFondos.pepFechaInicio,
+        "Fecha de fin (PEP) anterior a la de inicio"
       )
-        return false
     }
     if (p.label === "Asesor") {
-      if (!form.cli_contac || !form.cli_motivoCompra) return false
+      falta(
+        !form.cli_asesorTelf,
+        "Teléfono del asesor (cargarlo en el usuario del asesor principal)"
+      )
+      falta(!form.cli_contac, "¿Cómo nos contactó?")
+      falta(!form.cli_motivoCompra, "Motivo de compra")
     }
-    return true
+    return faltan
   }
 
-  const pasoActualCompleto = pasos[paso] ? pasoCompleto(pasos[paso]) : false
-  const todosLosPasosCompletos = pasos.length > 0 && pasos.every(pasoCompleto)
+  const pasosCompletos = pasos.map((p) => faltantesDePaso(p).length === 0)
+  const todosLosPasosCompletos = pasos.length > 0 && pasosCompletos.every(Boolean)
+  const pasoActualCompleto = pasosCompletos[paso] ?? false
 
   // Concatena prefijo + número al valor plano que espera el backend legacy (ej.
   // "+593999999999") — undefined si no hay número, igual que el resto de campos
@@ -1411,8 +1502,9 @@ export function OfertaCompraContent({ id }: { id: string }) {
         cli_direccion: form.cli_direccion.trim() || undefined,
         cli_trabActividad: form.cli_trabActividad || undefined,
         cli_trabEmpresa: form.cli_trabEmpresa || undefined,
-        cli_trabProfesion: form.cli_trabProfesion || undefined,
-        cli_trabCargo: form.cli_trabCargo || undefined,
+        cli_trabProfesion:
+          unirProfesion(form.cli_trabProfesion, form.cli_trabProfesionOtro) || undefined,
+        cli_trabCargo: unirCargo(form.cli_trabCargo, form.cli_trabCargoOtro) || undefined,
         cli_trabTiempo: form.cli_trabTiempo || undefined,
         cli_trabSector: form.cli_trabSector || undefined,
         cli_trabDireccion: form.cli_trabDireccion || undefined,
@@ -1425,7 +1517,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
           : undefined,
         cli_trabRuc: form.cli_trabRuc || undefined,
         cli_trabTipoNegocio: form.cli_trabTipoNegocio || undefined,
-        ...(form.cli_trabActividad === ACTIVIDAD_OTRO
+        ...(form.cli_transTerceros === SI
           ? {
               cli_transNombre: form.cli_transNombre.trim() || undefined,
               cli_transID: form.cli_transID || undefined,
@@ -1445,7 +1537,20 @@ export function OfertaCompraContent({ id }: { id: string }) {
                   ? form.cli_transRelacionDueno.trim() || undefined
                   : undefined,
             }
-          : {}),
+          : // Sin el check se borra lo que hubiera guardado de un tercero.
+            {
+              cli_transNombre: null,
+              cli_transID: null,
+              cli_transNacionalidad: null,
+              cli_transProfesion: null,
+              cli_transCargo: null,
+              cli_transTelefono: null,
+              cli_transDireccion: null,
+              cli_transCiudad: null,
+              cli_transEstadoCivil: null,
+              cli_transIntermediario: null,
+              cli_transRelacionDueno: null,
+            }),
         finalizar: true,
       }
       if (ofertaId) {
@@ -1473,7 +1578,10 @@ export function OfertaCompraContent({ id }: { id: string }) {
           patrimonio: datosFinancieros.patrimonio
             ? Number(datosFinancieros.patrimonio)
             : undefined,
-          fuentePatrimonio: datosFinancieros.fuentePatrimonio || undefined,
+          fuentePatrimonio:
+            (datosFinancieros.fuentePatrimonio === "Otro"
+              ? datosFinancieros.fuentePatrimonioOtro.trim()
+              : datosFinancieros.fuentePatrimonio) || undefined,
           ingresoMensual: datosFinancieros.ingresoMensual
             ? Number(datosFinancieros.ingresoMensual)
             : undefined,
@@ -1626,7 +1734,16 @@ export function OfertaCompraContent({ id }: { id: string }) {
                   </div>
                 )}
 
-                <Stepper steps={pasos.map((p) => p.label)} currentIndex={paso} />
+                {/* Se puede saltar a cualquier paso anterior, o a uno más adelante si
+                    todos los pasos previos tienen sus obligatorios completos. */}
+                <Stepper
+                  steps={pasos.map((p) => p.label)}
+                  currentIndex={paso}
+                  onStepClick={setPaso}
+                  puedeIrA={(destino) =>
+                    destino < paso || pasosCompletos.slice(0, destino).every(Boolean)
+                  }
+                />
 
                 <div className="mb-5.5 flex items-center gap-3.5">
                   <div
@@ -1890,15 +2007,23 @@ export function OfertaCompraContent({ id }: { id: string }) {
 
                       {/* Profesión / ocupación — aplica a cualquier tipo de actividad,
                           se muestra en el reporte de licitud de fondos. */}
-                      <SelectField
+                      <ComboboxField
                         label="Profesión / Ocupación *"
                         placeholder="Seleccione la profesión"
-                        options={opcionesCon(CARGOS_OPCIONES, form.cli_trabProfesion)}
+                        searchPlaceholder="Buscar profesión o categoría…"
+                        options={OPCIONES_PROFESIONES}
                         value={form.cli_trabProfesion}
-                        onValueChange={(valor) =>
-                          actualizarCampo("cli_trabProfesion", valor)
-                        }
+                        onChange={(valor) => actualizarCampo("cli_trabProfesion", valor)}
                       />
+                      {requiereEspecificarProfesion(form.cli_trabProfesion) && (
+                        <TextField
+                          label="Especifique la profesión *"
+                          value={form.cli_trabProfesionOtro}
+                          onChange={(valor) =>
+                            actualizarCampo("cli_trabProfesionOtro", valor)
+                          }
+                        />
+                      )}
 
                       {/* CAMPOS PARA EMPLEADO / DEPENDIENTE */}
                       {(form.cli_trabActividad === "DEPENDIENTE" ||
@@ -1915,12 +2040,21 @@ export function OfertaCompraContent({ id }: { id: string }) {
                           <SelectField
                             label="Cargo / Puesto *"
                             placeholder="Seleccione el cargo"
-                            options={CARGOS_OPCIONES}
+                            options={CARGOS_NIVELES}
                             value={form.cli_trabCargo}
                             onValueChange={(valor) =>
                               actualizarCampo("cli_trabCargo", valor)
                             }
                           />
+                          {form.cli_trabCargo === CARGO_OTRO && (
+                            <TextField
+                              label="Especifique el cargo *"
+                              value={form.cli_trabCargoOtro}
+                              onChange={(valor) =>
+                                actualizarCampo("cli_trabCargoOtro", valor)
+                              }
+                            />
+                          )}
 
                           <TextField
                             label="Antigüedad de relación (años) *"
@@ -2007,8 +2141,25 @@ export function OfertaCompraContent({ id }: { id: string }) {
                         </>
                       )}
 
-                      {/* CAMPOS PARA "OTRO": quién efectúa la transacción (sección 3 UAFE) */}
-                      {form.cli_trabActividad === ACTIVIDAD_OTRO && (
+                      {/* Check permanente: otra persona realiza la transacción → datos de
+                          quien la efectúa (sección 3 UAFE). */}
+                      <label
+                        className={cn(
+                          "flex cursor-pointer items-center gap-3 rounded-md border px-4 py-3 text-sm font-semibold transition-colors sm:col-span-2",
+                          form.cli_transTerceros === SI
+                            ? "border-primary/40 bg-primary/5"
+                            : "border-border hover:bg-muted/40"
+                        )}
+                      >
+                        <Checkbox
+                          checked={form.cli_transTerceros === SI}
+                          onCheckedChange={(marcado) =>
+                            actualizarCampo("cli_transTerceros", marcado ? SI : "")
+                          }
+                        />
+                        Otra persona realizará la transacción
+                      </label>
+                      {form.cli_transTerceros === SI && (
                         <div className="border-border rounded-md border p-4 sm:col-span-2">
                           <div className="mb-4 text-sm font-semibold">
                             Datos de quien efectúa la transacción
@@ -2187,15 +2338,21 @@ export function OfertaCompraContent({ id }: { id: string }) {
                       <SelectField
                         label="Fuente de Patrimonio *"
                         placeholder="Seleccione la fuente del patrimonio"
-                        options={opcionesCon(
-                          FUENTES_INGRESOS,
-                          datosFinancieros.fuentePatrimonio
-                        )}
+                        options={FUENTES_INGRESOS}
                         value={datosFinancieros.fuentePatrimonio}
                         onValueChange={(valor) =>
                           actualizarDatoFinanciero("fuentePatrimonio", valor)
                         }
                       />
+                      {datosFinancieros.fuentePatrimonio === "Otro" && (
+                        <TextField
+                          label="Especifique la fuente del patrimonio *"
+                          value={datosFinancieros.fuentePatrimonioOtro ?? ""}
+                          onChange={(valor) =>
+                            actualizarDatoFinanciero("fuentePatrimonioOtro", valor)
+                          }
+                        />
+                      )}
 
                       <div className="border-border rounded-md border p-4 sm:col-span-2">
                         <div className="mb-3 flex items-center justify-between">
@@ -2372,7 +2529,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
                       </div>
                       <div className="sm:col-span-2">
                         <SelectField
-                          label="¿El cliente es o ha sido funcionario, electo o designado en algún cargo gubernamental o público?"
+                          label="¿El cliente es o ha sido funcionario, electo o designado en algún cargo gubernamental o público? *"
                           placeholder="Seleccione"
                           options={SI_NO_OPCIONES}
                           value={licitudFondos.funcionarioElecto}
@@ -2383,7 +2540,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
                       </div>
                       <div className="sm:col-span-2">
                         <SelectField
-                          label="¿El cliente tiene relación familiar o de negocio con algún funcionario o entidad de gobierno?"
+                          label="¿El cliente tiene relación familiar o de negocio con algún funcionario o entidad de gobierno? *"
                           placeholder="Seleccione"
                           options={SI_NO_OPCIONES}
                           value={licitudFondos.relacionGobierno}
@@ -2394,7 +2551,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
                       </div>
                       <div className="sm:col-span-2">
                         <SelectField
-                          label="¿El cliente realiza trabajos o contratos para alguna entidad del sector público?"
+                          label="¿El cliente realiza trabajos o contratos para alguna entidad del sector público? *"
                           placeholder="Seleccione"
                           options={SI_NO_OPCIONES}
                           value={licitudFondos.trabajoSectorPublico}
@@ -2469,7 +2626,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
 
                       <div className="sm:col-span-2">
                         <TextField
-                          label="¿De dónde provienen los fondos, bienes muebles e inmuebles de esta transacción?"
+                          label="¿De dónde provienen los fondos, bienes muebles e inmuebles de esta transacción? *"
                           value={licitudFondos.fondosOrigen}
                           onChange={(valor) =>
                             actualizarLicitudFondos("fondosOrigen", valor)
@@ -2478,7 +2635,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
                       </div>
                       <div className="sm:col-span-2">
                         <TextField
-                          label="¿Para qué serán utilizados los fondos, bienes muebles e inmuebles de esta transacción?"
+                          label="¿Para qué serán utilizados los fondos, bienes muebles e inmuebles de esta transacción? *"
                           value={licitudFondos.fondosDestino}
                           onChange={(valor) =>
                             actualizarLicitudFondos("fondosDestino", valor)
@@ -2531,9 +2688,15 @@ export function OfertaCompraContent({ id }: { id: string }) {
                           }
                           searchPlaceholder="Buscar por nombre…"
                           emptyMessage={
-                            cargandoPersonas ? "Cargando…" : "Sin resultados."
+                            cargandoPersonas
+                              ? "Cargando…"
+                              : "Sin resultados. Escribe el nombre para agregarlo."
                           }
                           options={opcionesPersonasProceso}
+                          // Si el cliente no está en la lista, se agrega escribiendo su
+                          // nombre: queda guardado con la oferta y desde ahí aparece en
+                          // esta lista para las próximas (ver listarPersonasProceso).
+                          permitirAgregar
                           value={form.cli_contacNombre}
                           onChange={(valor) => actualizarCampo("cli_contacNombre", valor)}
                         />

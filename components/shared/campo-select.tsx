@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select"
 import { ComboboxField } from "@/components/shared/combobox-field"
 import type { OpcionSelect } from "@/components/shared/select-options"
+import { EtiquetaCampo } from "@/components/shared/etiqueta-campo"
 
 // Con más opciones que esto se usa el combo con buscador: en el teléfono la lista del
 // Select no se podía desplazar con el dedo (sobre todo dentro de un Sheet), y una lista
@@ -46,7 +47,9 @@ export function CampoSelect({
 
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label>
+        <EtiquetaCampo>{label}</EtiquetaCampo>
+      </Label>
       <Select value={value || undefined} onValueChange={onChange}>
         <SelectTrigger className="w-full">
           <SelectValue placeholder={placeholder ?? "Seleccionar…"} />

@@ -42,6 +42,7 @@
     "clsx": "^2.1.1",
     "docx": "^9.7.1",
     "html-to-docx": "^1.8.0",
+    "html2canvas-pro": "^1.5.11",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.2",
     "lucide-react": "^1.23.0",

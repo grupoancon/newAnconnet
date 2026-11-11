@@ -10,9 +10,6 @@ export const actividades = [
     },
     {
         nombre: "REMESAS DEL EXTERIOR"
-    },
-    {
-        nombre: "OTRO"
     }
 
 ]

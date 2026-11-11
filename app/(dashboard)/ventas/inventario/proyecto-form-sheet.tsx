@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import { ImagePlus, Plus, Trash2 } from "lucide-react"
-import { generarId } from "@/lib/utils"
+import { cn, generarId } from "@/lib/utils"
+import { CREDITO_DIRECTO_SIN_INTERES } from "@/lib/tipos-financiamiento"
 
 import { CampoSelect } from "@/components/shared/campo-select"
 import { ProjectCard } from "@/components/shared/project-card"
 import { useToast } from "@/components/shared/toast-provider"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -90,6 +92,9 @@ export function ProyectoFormSheet({
   >([])
   const [fechaEntrega, setFechaEntrega] = useState("")
   const [estado, setEstado] = useState<string>("ACTIVO")
+  // "Crédito directo sin interés": si se ofrece y hasta qué fecha (vacío = sin límite).
+  const [sinInteresHabilitado, setSinInteresHabilitado] = useState(false)
+  const [sinInteresFechaLimite, setSinInteresFechaLimite] = useState("")
   // Tarjeta del proyecto en Nueva Venta / catálogo.
   const [descripcion, setDescripcion] = useState("")
   const [imagenGuardada, setImagenGuardada] = useState<string | null>(null)
@@ -128,6 +133,8 @@ export function ProyectoFormSheet({
       ])
       setFechaEntrega("")
       setEstado("ACTIVO")
+      setSinInteresHabilitado(false)
+      setSinInteresFechaLimite("")
       setDescripcion("")
       setImagenGuardada(null)
       setArchivoFoto(null)
@@ -164,6 +171,8 @@ export function ProyectoFormSheet({
         )
         setFechaEntrega(datos.fecha_entrega?.slice(0, 10) ?? "")
         setEstado(datos.estado.trim() || "ACTIVO")
+        setSinInteresHabilitado(Boolean(datos.sin_interes_habilitado))
+        setSinInteresFechaLimite(datos.sin_interes_fecha_limite?.slice(0, 10) ?? "")
         setDescripcion(datos.descripcion ?? "")
         setImagenGuardada(datos.imagen_url ?? null)
       })
@@ -260,6 +269,11 @@ export function ProyectoFormSheet({
           fecha_entrega: fechaEntrega || null,
           estado: estado as (typeof ESTADOS_PROYECTO)[number]["value"],
           descripcion: descripcion.trim() || null,
+          sin_interes_habilitado: sinInteresHabilitado,
+          // Deshabilitado no necesita fecha; vacía = sin límite.
+          sin_interes_fecha_limite: sinInteresHabilitado
+            ? sinInteresFechaLimite || null
+            : null,
           ...(quitarFoto && !archivoFoto ? { imagen_url: null } : {}),
         }
         let guardado =
@@ -546,6 +560,45 @@ export function ProyectoFormSheet({
             onChange={(event) => setFechaEntrega(event.target.value)}
             disabled={cargando}
           />
+
+          <section className="border-border space-y-3 rounded-md border p-3.5">
+            <label
+              className={cn(
+                "flex cursor-pointer items-start gap-2.5",
+                cargando && "cursor-not-allowed opacity-60"
+              )}
+            >
+              <Checkbox
+                checked={sinInteresHabilitado}
+                disabled={cargando}
+                onCheckedChange={setSinInteresHabilitado}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="block text-sm font-semibold">
+                  {CREDITO_DIRECTO_SIN_INTERES}
+                </span>
+                <span className="text-muted-foreground block text-xs">
+                  Ofrecer este tipo de financiamiento en los lotes de este proyecto.
+                </span>
+              </span>
+            </label>
+            {sinInteresHabilitado ? (
+              <div>
+                <Campo
+                  label="Fecha límite (opcional)"
+                  type="date"
+                  value={sinInteresFechaLimite}
+                  onChange={(event) => setSinInteresFechaLimite(event.target.value)}
+                  disabled={cargando}
+                />
+                <p className="text-muted-foreground mt-1.5 text-xs">
+                  Ningún pago del financiamiento puede caer después de esta fecha. Vacía =
+                  sin límite.
+                </p>
+              </div>
+            ) : null}
+          </section>
 
           <CampoSelect
             label="Estado"

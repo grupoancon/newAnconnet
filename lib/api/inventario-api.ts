@@ -122,6 +122,10 @@ export type ProyectoInventario = {
   // vitrina por defecto del frontend (ver selector-proyectos-content.tsx).
   descripcion?: string | null
   imagen_url?: string | null
+  // "Crédito directo sin interés": si el proyecto lo ofrece y hasta qué fecha puede
+  // caer el último pago (null = sin límite). Ver tiposFinanciamientoParaProyecto.
+  sin_interes_habilitado?: boolean
+  sin_interes_fecha_limite?: string | null
 }
 
 export type PuntoPlano = { x: number; y: number }
@@ -276,6 +280,8 @@ export type ProyectoInventarioInput = {
   descripcion?: string | null
   // Solo para quitar la foto (null); para ponerla se usa subirImagenProyecto.
   imagen_url?: null
+  sin_interes_habilitado?: boolean
+  sin_interes_fecha_limite?: string | null
 }
 
 // GET /inventarios/proyectos — lista completa de proyectos.

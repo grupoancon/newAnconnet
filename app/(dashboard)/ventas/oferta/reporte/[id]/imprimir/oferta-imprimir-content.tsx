@@ -3,7 +3,7 @@
 import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/lib/navigation"
-import { Plus, Printer, Trash2, ArrowLeft } from "lucide-react"
+import { Plus, Trash2, ArrowLeft } from "lucide-react"
 
 import { EmptyState } from "@/components/shared/empty-state"
 import { LUGARES_VENTA_OPCIONES } from "@/components/shared/select-options"
@@ -11,6 +11,7 @@ import { SelectField } from "@/components/shared/select-field"
 import { Spinner } from "@/components/shared/spinner"
 import { useToast } from "@/components/shared/toast-provider"
 import { Button } from "@/components/ui/button"
+import { BotonImprimir } from "@/components/shared/boton-imprimir"
 import { Input } from "@/components/ui/input"
 import {
   InventarioApiError,
@@ -372,10 +373,10 @@ export function OfertaImprimirContent({ id }: { id: string }) {
           Volver
         </Button>
         {oferta && (
-          <Button onClick={() => window.print()}>
-            <Printer className="size-3.5" strokeWidth={1.8} />
-            Imprimir
-          </Button>
+          <BotonImprimir
+            selector=".reporte-imprimible"
+            nombreArchivo={`Oferta de compra ${id}`}
+          />
         )}
       </div>
 
@@ -935,7 +936,7 @@ function Hoja({
   children: React.ReactNode
 }) {
   return (
-    <div className={`hoja${ultima ? " hoja-ultima" : ""}`}>
+    <div className={["hoja", ultima && "hoja-ultima"].filter(Boolean).join(" ")}>
       {conMembrete && <div className="hoja-membrete" aria-hidden />}
       <div className="hoja-contenido">{children}</div>
     </div>

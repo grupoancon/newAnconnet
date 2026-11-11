@@ -218,7 +218,7 @@ export function PreEntregaContent({ id }: { id: number }) {
 
                 <div>
                   <label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
-                    Fecha y hora de entrega *
+                    Fecha y hora de entrega <span className="text-destructive">*</span>
                   </label>
                   <fieldset
                     disabled={bloqueada}

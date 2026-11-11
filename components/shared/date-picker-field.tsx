@@ -5,6 +5,7 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-reac
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { EtiquetaCampo } from "@/components/shared/etiqueta-campo"
 
 const MESES_NOMBRES = [
   "Enero",
@@ -89,7 +90,7 @@ export function DatePickerField({
     <div>
       {label ? (
         <label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
-          {label}
+          <EtiquetaCampo>{label}</EtiquetaCampo>
         </label>
       ) : null}
       <Popover open={abierto} onOpenChange={setAbierto}>

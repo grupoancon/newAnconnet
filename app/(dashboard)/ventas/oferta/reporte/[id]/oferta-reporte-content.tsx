@@ -85,7 +85,13 @@ function telefonoLegible(valor: string | null | undefined): string {
 // normalizados a minuscula para StatusBadge.
 function normalizarEstado(crudo: string | null | undefined): StatusVariant {
   const clave = (crudo ?? "").trim().toLowerCase()
-  if (clave === "aprobado" || clave === "ingresado" || clave === "rechazado") return clave
+  if (
+    clave === "aprobado" ||
+    clave === "ingresado" ||
+    clave === "rechazado" ||
+    clave === "incompleto"
+  )
+    return clave
   return "pendiente"
 }
 
@@ -311,7 +317,7 @@ export function OfertaReporteContent({ id }: { id: string }) {
         },
       ]),
       seccion("Quién efectúa la transacción", [
-        ...(oferta.cli_trabActividad === "OTRO"
+        ...(oferta.cli_trabActividad === "OTRO" || oferta.cli_transNombre
           ? [
               {
                 campo: "cli_transNombre",
@@ -764,6 +770,12 @@ export function OfertaReporteContent({ id }: { id: string }) {
               />
             ) : (
               <>
+                {estado === "incompleto" && (
+                  <div className="border-status-reservado-border bg-status-reservado-bg text-status-reservado-fg mb-6 rounded-md border p-4 text-sm font-semibold">
+                    Esta oferta se guardó con campos obligatorios sin completar. Hay que
+                    completarla y volver a guardarla para poder aprobarla.
+                  </div>
+                )}
                 {observaciones.length > 0 && (
                   <div className="border-destructive/40 bg-destructive/5 mb-6 rounded-md border p-4">
                     <div className="text-destructive mb-2 text-sm font-semibold">

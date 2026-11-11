@@ -103,6 +103,7 @@ export const PROSPECTADORES = ["Cristian Mosquera", "Tatiana Cevallos", "Aaron A
 export const TIPOS_OPERACION = [
   "Compraventa",
   "Promesa de compraventa",
+  "Convenio de compra",
   "Arrendamiento",
   "Cesión de derechos",
   "Anticresis",
@@ -128,6 +129,7 @@ export const FUENTES_INGRESOS = [
   "Alquileres",
   "Honorarios profesionales",
   "Remesas",
+  "Jubilado",
   "Otro",
 ]
 

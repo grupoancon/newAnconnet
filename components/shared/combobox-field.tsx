@@ -1,11 +1,12 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { Check, ChevronDown, Search } from "lucide-react"
+import { Fragment, useMemo, useState } from "react"
+import { Check, ChevronDown, Plus, Search } from "lucide-react"
 
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { EtiquetaCampo } from "@/components/shared/etiqueta-campo"
 
 export type ComboboxOption = {
   value: string
@@ -14,6 +15,9 @@ export type ComboboxOption = {
   // (ej. el pais para un combo de nacionalidad, buscable aunque la opcion muestre el
   // gentilicio).
   keywords?: string
+  // Categoría: si las opciones la traen, la lista se muestra agrupada con un título por
+  // categoría, y buscar el nombre de la categoría muestra todas sus opciones.
+  group?: string
 }
 
 function normalizar(texto: string): string {
@@ -36,6 +40,7 @@ export function ComboboxField({
   value,
   onChange,
   className,
+  permitirAgregar = false,
 }: {
   label?: string
   placeholder: string
@@ -45,25 +50,44 @@ export function ComboboxField({
   value?: string
   onChange: (value: string) => void
   className?: string
+  // Si la búsqueda no coincide con ninguna opción, ofrece "Agregar «texto»" y lo usa
+  // como valor tal cual (un valor que no está en `options` igual se muestra).
+  permitirAgregar?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [busqueda, setBusqueda] = useState("")
 
   const seleccionada = options.find((opcion) => opcion.value === value)
+  const etiquetaSeleccionada =
+    seleccionada?.label ?? (permitirAgregar && value ? value : undefined)
 
   const opcionesFiltradas = useMemo(() => {
     const termino = normalizar(busqueda.trim())
     if (!termino) return options
     return options.filter((opcion) =>
-      normalizar(`${opcion.label} ${opcion.keywords ?? ""}`).includes(termino)
+      normalizar(
+        `${opcion.label} ${opcion.keywords ?? ""} ${opcion.group ?? ""}`
+      ).includes(termino)
     )
   }, [options, busqueda])
+
+  const textoNuevo = busqueda.trim()
+  const puedeAgregar =
+    permitirAgregar &&
+    textoNuevo.length > 0 &&
+    !options.some((opcion) => normalizar(opcion.value) === normalizar(textoNuevo))
+
+  function elegir(valor: string) {
+    onChange(valor)
+    setOpen(false)
+    setBusqueda("")
+  }
 
   return (
     <div>
       {label ? (
         <Label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
-          {label}
+          <EtiquetaCampo>{label}</EtiquetaCampo>
         </Label>
       ) : null}
       {/* modal: dentro de un Sheet/Dialog, el bloqueo de scroll del Sheet se tragaba el
@@ -86,8 +110,10 @@ export function ComboboxField({
               className
             )}
           >
-            <span className={cn("truncate", !seleccionada && "text-muted-foreground")}>
-              {seleccionada?.label ?? placeholder}
+            <span
+              className={cn("truncate", !etiquetaSeleccionada && "text-muted-foreground")}
+            >
+              {etiquetaSeleccionada ?? placeholder}
             </span>
             <ChevronDown className="text-muted-foreground size-4 shrink-0" />
           </button>
@@ -107,30 +133,45 @@ export function ComboboxField({
             />
           </div>
           <div className="max-h-64 overflow-y-auto overscroll-contain p-1">
+            {puedeAgregar && (
+              <button
+                type="button"
+                onClick={() => elegir(textoNuevo)}
+                className="hover:bg-accent hover:text-accent-foreground text-primary flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 text-left text-sm font-semibold"
+              >
+                <Plus className="size-3.5 shrink-0" strokeWidth={2} />
+                <span className="truncate">Agregar «{textoNuevo}»</span>
+              </button>
+            )}
             {opcionesFiltradas.length === 0 ? (
-              <div className="text-muted-foreground px-2.5 py-3 text-center text-sm">
-                {emptyMessage}
-              </div>
+              puedeAgregar ? null : (
+                <div className="text-muted-foreground px-2.5 py-3 text-center text-sm">
+                  {emptyMessage}
+                </div>
+              )
             ) : (
               opcionesFiltradas.map((opcion, index) => (
-                <button
-                  key={`${opcion.value}::${index}`}
-                  type="button"
-                  onClick={() => {
-                    onChange(opcion.value)
-                    setOpen(false)
-                    setBusqueda("")
-                  }}
-                  className="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 text-left text-sm"
-                >
-                  <Check
-                    className={cn(
-                      "size-3.5 shrink-0",
-                      opcion.value === value ? "opacity-100" : "opacity-0"
+                <Fragment key={`${opcion.value}::${index}`}>
+                  {opcion.group &&
+                    opcion.group !== opcionesFiltradas[index - 1]?.group && (
+                      <div className="text-muted-foreground px-2.5 pt-2.5 pb-1 text-[11px] font-bold tracking-wide uppercase">
+                        {opcion.group}
+                      </div>
                     )}
-                  />
-                  <span className="truncate">{opcion.label}</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => elegir(opcion.value)}
+                    className="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 text-left text-sm"
+                  >
+                    <Check
+                      className={cn(
+                        "size-3.5 shrink-0",
+                        opcion.value === value ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <span className="truncate">{opcion.label}</span>
+                  </button>
+                </Fragment>
               ))
             )}
           </div>

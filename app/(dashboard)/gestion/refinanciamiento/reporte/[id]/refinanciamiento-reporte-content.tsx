@@ -1,5 +1,6 @@
 "use client"
 
+import { esTipoContado } from "@/lib/tipos-financiamiento"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/lib/navigation"
 import {
@@ -538,7 +539,7 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
                             }
                           >
                             <td className="px-4.5 py-1.75 font-sans">
-                              {(refinanciamiento.financ_type === "Contado" ||
+                              {(esTipoContado(refinanciamiento.financ_type ?? "") ||
                                 esBiessLike(refinanciamiento.financ_type)) &&
                               fila.forma_pago === "Entrada"
                                 ? "Cuota"
@@ -615,7 +616,7 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
                   </div>
                 </div>
 
-                {refinanciamiento.financ_type !== "Contado" &&
+                {!esTipoContado(refinanciamiento.financ_type ?? "") &&
                   !esBiessLike(refinanciamiento.financ_type) && (
                     <>
                       <SeccionTitulo texto="Cronograma de amortización" />

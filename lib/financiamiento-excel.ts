@@ -10,6 +10,7 @@
 // SheetJS solo por esto; se importa dentro de la función para que no entre al bundle
 // inicial.
 
+import { esTipoContado } from "@/lib/tipos-financiamiento"
 import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import type { LoteInventario } from "@/lib/api/inventario-api"
 import type {
@@ -110,7 +111,7 @@ function esBiessLike(tipo: string | null | undefined): boolean {
 }
 
 function esContadoLike(tipo: string | null | undefined): boolean {
-  return tipo === "Contado" || esBiessLike(tipo)
+  return esTipoContado(tipo ?? "") || esBiessLike(tipo)
 }
 
 // Etiqueta de la columna "FORMA DE PAGO" — la misma que se ve en pantalla, en

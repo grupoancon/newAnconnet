@@ -1,5 +1,6 @@
 "use client"
 
+import { esTipoContado } from "@/lib/tipos-financiamiento"
 import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/lib/navigation"
@@ -328,7 +329,7 @@ export function CotizacionReporteContent({ id }: { id: string }) {
                             }
                           >
                             <td className="px-4.5 py-1.75 font-sans">
-                              {(cotizacion.financ_type === "Contado" ||
+                              {(esTipoContado(cotizacion.financ_type ?? "") ||
                                 cotizacion.financ_type === "Crédito BIESS") &&
                               fila.forma_pago === "Entrada"
                                 ? "Cuota"
@@ -399,7 +400,7 @@ export function CotizacionReporteContent({ id }: { id: string }) {
                   </div>
                 </div>
 
-                {cotizacion.financ_type !== "Contado" &&
+                {!esTipoContado(cotizacion.financ_type ?? "") &&
                   cotizacion.financ_type !== "Crédito BIESS" && (
                     <>
                       <SeccionTitulo texto="Cronograma de amortización" />

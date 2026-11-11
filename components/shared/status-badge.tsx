@@ -7,6 +7,7 @@ export type StatusVariant =
   | "hipotecado"
   | "aprobado"
   | "ingresado"
+  | "incompleto"
   | "pendiente"
   | "rechazado"
   | "nuevo"
@@ -23,6 +24,7 @@ const VARIANT_CLASSES: Record<StatusVariant, string> = {
   rechazado: "bg-status-bloqueado-bg text-status-bloqueado-fg",
   hipotecado: "bg-status-hipotecado-bg text-status-hipotecado-fg",
   ingresado: "bg-status-hipotecado-bg text-status-hipotecado-fg",
+  incompleto: "bg-status-reservado-bg text-status-reservado-fg",
   nuevo: "bg-brand-gradient text-primary-foreground",
   pronto: "bg-muted text-muted-foreground border border-border",
   "en-tramite": "bg-accent text-accent-foreground",
@@ -36,6 +38,7 @@ const VARIANT_LABEL: Record<StatusVariant, string> = {
   hipotecado: "Hipotecado",
   aprobado: "Aprobado",
   ingresado: "Ingresado",
+  incompleto: "Incompleto",
   pendiente: "Pendiente",
   rechazado: "Rechazado",
   nuevo: "Nuevo",

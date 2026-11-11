@@ -1,5 +1,12 @@
 "use client"
 
+import {
+  CREDITO_DIRECTO_SIN_INTERES,
+  avisoSinInteres,
+  errorSinInteres,
+  esTipoContado,
+  tiposFinanciamientoParaProyecto,
+} from "@/lib/tipos-financiamiento"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "@/lib/navigation"
 import {
@@ -112,13 +119,13 @@ const ESCRITURA_CONTADO = 250
 // remanente para completar el total a financiar lo absorben las cuotas, no esa fila.
 // Ver etiquetaFilaCierre/filaCierreFija más abajo para el detalle de cada tipo.
 function esContadoLike(tipo: string): boolean {
-  return tipo === "Contado" || tipo === "Crédito BIESS"
+  return esTipoContado(tipo) || tipo === "Crédito BIESS"
 }
 
 // Etiqueta de la fila que cierra la tabla de cada tipo — null si ese tipo no tiene
 // fila de cierre (Crédito directo/Mixto, que siguen con cronograma).
 function etiquetaFilaCierre(tipo: string): string | null {
-  if (tipo === "Contado") return "Pago total"
+  if (esTipoContado(tipo)) return "Pago total"
   if (tipo === "Crédito BIESS") return "Desembolso BIESS"
   return null
 }
@@ -132,7 +139,8 @@ function usaDesembolsoBiess(tipo: string): boolean {
   return tipo === "Crédito BIESS" || tipo === "Mixto"
 }
 
-// "Mixto" pide valor y fecha de desembolso (CONFIGURACIÓN DE FINANCIAMIENTO) pero ya
+// "Mixto" pide solo el valor de desembolso (su fecha sale sola: un mes después de la
+// última cuota, ver fechaDesembolsoMixto en el backend) y ya
 // no lo pone en la tabla de entrada: va como última fila del cronograma, con su
 // interés y la escritura fija de Mixto (lo arma el backend,
 // agregarDesembolsoAlCronograma). Solo Crédito BIESS lo lleva en la tabla de entrada.
@@ -215,12 +223,15 @@ type FilaEntradaTabla = {
 // fórmula que calcularCuotaBase en el backend.
 function calcularCuotaMensualSugerida(
   totalFinanciar: number,
-  meses: number
+  meses: number,
+  // "Mixto": desembolso BIESS pendiente — paga interés cada mes, así que la cuota
+  // suma ese interés (mismo criterio que calcularCuotaBase en el backend).
+  saldoDiferido = 0
 ): number | null {
   if (!meses || meses <= 0 || !totalFinanciar || totalFinanciar <= 0) return null
   const tasaMensual = TASA_INTERES_ANUAL_FIJA / 100 / 12
   const factor = Math.pow(1 + tasaMensual, -meses)
-  return (totalFinanciar * tasaMensual) / (1 - factor)
+  return (totalFinanciar * tasaMensual) / (1 - factor) + saldoDiferido * tasaMensual
 }
 
 function formatearMoneda(valor: string | number | null | undefined): string {
@@ -670,10 +681,9 @@ export function FinanciamientoContent({ id }: { id: string }) {
     setFinanciamiento({
       ...financiamiento,
       detalle: financiamiento.detalle.map((cuota) =>
-        // La fila del desembolso BIESS (Mixto) tiene su propia fecha.
-        cuota.desembolso
-          ? cuota
-          : { ...cuota, fecha: calcularFechaEntrada(baseCronograma, cuota.mes) }
+        // La fila del desembolso BIESS (Mixto) también sigue el calendario: va un mes
+        // después de la última cuota (su "mes" ya es el siguiente).
+        ({ ...cuota, fecha: calcularFechaEntrada(baseCronograma, cuota.mes) })
       ),
     })
   }
@@ -702,6 +712,13 @@ export function FinanciamientoContent({ id }: { id: string }) {
   // campo suelto "Entrada": para Crédito directo la suma tiene que calzar con el 5%
   // del valor del lote (se valida también en el backend).
   const [entradasTabla, setEntradasTabla] = useState<FilaEntradaTabla[]>([])
+  // "Crédito directo sin interés" deshabilitado en el proyecto, o con un pago después
+  // de su fecha límite: se muestra bajo el selector y bloquea generar/guardar.
+  const errorTipoSinInteres = errorSinInteres(
+    financType,
+    loteInfo?.proyecto,
+    entradasTabla.map((fila) => fila.fechaPago)
+  )
   const [promocionesSeleccionadas, setPromocionesSeleccionadas] = useState<number[]>([])
   const [gestionarPromocionesAbierto, setGestionarPromocionesAbierto] = useState(false)
   const [desgloseCalculoAbierto, setDesgloseCalculoAbierto] = useState(false)
@@ -849,7 +866,7 @@ export function FinanciamientoContent({ id }: { id: string }) {
                 observaciones: fila.observaciones ?? "",
               }))
               .filter((fila) => {
-                if (fila.formaPago === "Pago total") return tipoCargado === "Contado"
+                if (fila.formaPago === "Pago total") return esTipoContado(tipoCargado)
                 if (fila.formaPago === "Desembolso BIESS") {
                   return usaDesembolsoBiess(tipoCargado)
                 }
@@ -864,7 +881,7 @@ export function FinanciamientoContent({ id }: { id: string }) {
             // valor/fecha de desembolso que ingrese el asesor, no hay un monto
             // provisional razonable que fabricar acá.
             if (
-              tipoCargado === "Contado" &&
+              esTipoContado(tipoCargado) &&
               filasCargadas.length > 0 &&
               !filasCargadas.some((fila) => fila.formaPago === "Pago total")
             ) {
@@ -929,8 +946,11 @@ export function FinanciamientoContent({ id }: { id: string }) {
             setAbonoInicialGenerar(
               filasAbonoInicial.length ? String(redondear(sumaAbonoInicial)) : ""
             )
+            // "Valor de entrada" = total de la tabla (abono inicial + entradas).
             setValorEntradaTotalGenerar(
-              filasEntrada.length ? String(redondear(sumaEntradas)) : ""
+              filasEntrada.length
+                ? String(redondear(sumaEntradas + sumaAbonoInicial))
+                : ""
             )
             setNumeroEntradasGenerar(
               filasEntrada.length ? String(filasEntrada.length) : ""
@@ -1029,6 +1049,9 @@ export function FinanciamientoContent({ id }: { id: string }) {
       setDiscount(
         redondear(subtotalTrasPromocion * DESCUENTO_BIESS_PORCENTAJE).toFixed(2)
       )
+    } else if (financType === CREDITO_DIRECTO_SIN_INTERES) {
+      // Sin descuento por tipo de financiamiento.
+      setDiscount("")
     } else if (financType === "Mixto") {
       if (aplicarDescuentoMixto && valorLoteNumero > 0) {
         setDiscount(
@@ -1049,7 +1072,7 @@ export function FinanciamientoContent({ id }: { id: string }) {
   useEffect(() => {
     setEntradasTabla((anterior) => {
       const filtrado = anterior.filter((fila) => {
-        if (fila.formaPago === "Pago total") return financType === "Contado"
+        if (fila.formaPago === "Pago total") return esTipoContado(financType)
         if (fila.formaPago === "Desembolso BIESS") return desembolsoEnEntradas(financType)
         return true
       })
@@ -1202,11 +1225,10 @@ export function FinanciamientoContent({ id }: { id: string }) {
     (Math.abs(totalAFinanciar - Number(financiamiento.total_financ ?? 0)) > 0.01 ||
       Math.abs(entradaTotal - Number(financiamiento.entrada ?? 0)) > 0.01 ||
       (financType === "Mixto" &&
-        (Math.abs(
+        Math.abs(
           (Number(desembolsoValor) || 0) -
             (filaDesembolsoDe(financiamiento.detalle)?.capital ?? 0)
-        ) > 0.01 ||
-          desembolsoFecha !== filaDesembolsoDe(financiamiento.detalle)?.fecha)) ||
+        ) > 0.01) ||
       Number(meses) !== (financiamiento.no_cuotas ?? 0))
 
   // Contado/Crédito BIESS no piden el valor de las cuotas a mano — se deriva solo del
@@ -1218,13 +1240,16 @@ export function FinanciamientoContent({ id }: { id: string }) {
   // la tabla por un cambio no relacionado, ej. una promoción).
   const valorEntradaTotalEfectivo = useMemo(() => {
     const abonoInicial = Number(abonoInicialGenerar)
-    if (financType === "Contado") return redondear(totalAFinanciar - abonoInicial)
+    if (esTipoContado(financType)) return redondear(totalAFinanciar - abonoInicial)
     // "Crédito BIESS": el valor de desembolso tampoco lo reparten las cuotas — sale
     // aparte, fijo — así que también se resta acá antes de repartir el remanente.
     if (financType === "Crédito BIESS") {
       return redondear(totalAFinanciar - abonoInicial - (Number(desembolsoValor) || 0))
     }
-    return Number(valorEntradaTotalGenerar)
+    // Crédito directo/Mixto: "Valor de entrada" es el TOTAL de la tabla de entrada,
+    // abono inicial incluido — las cuotas reparten solo lo que queda tras restarlo
+    // (ej. entrada 1.000 y abono 200 → 800 entre las N entradas).
+    return redondear(Math.max(0, Number(valorEntradaTotalGenerar) - (abonoInicial || 0)))
   }, [
     financType,
     totalAFinanciar,
@@ -1404,7 +1429,7 @@ export function FinanciamientoContent({ id }: { id: string }) {
         variant: "error",
         title: "Faltan datos",
         description:
-          "Ingresa el valor de entrada y en cuántas cuotas repartirlo (o déjalos vacíos para solo abono inicial).",
+          "El valor de entrada tiene que ser mayor que el abono inicial, e indica en cuántas cuotas repartir el resto (o déjalos vacíos para solo abono inicial).",
       })
       return
     }
@@ -1569,7 +1594,10 @@ export function FinanciamientoContent({ id }: { id: string }) {
     const nuevoAbonoInicial = filasAbonoInicial.length
       ? String(redondear(sumaAbonoInicial))
       : ""
-    const nuevoValorEntrada = filasEntrada.length ? String(redondear(sumaEntradas)) : ""
+    // "Valor de entrada" = total de la tabla (abono inicial + entradas).
+    const nuevoValorEntrada = filasEntrada.length
+      ? String(redondear(sumaEntradas + sumaAbonoInicial))
+      : ""
     const nuevoNumeroEntradas =
       filasEntrada.length || tieneFilaCierre
         ? String(filasEntrada.length + (tieneFilaCierre ? 1 : 0))
@@ -1693,7 +1721,7 @@ export function FinanciamientoContent({ id }: { id: string }) {
         // sigue con el fijo ESCRITURA_CONTADO — ver mismo criterio en
         // calcularFilasEntradaGeneradas.
         escritura: esNuevaFilaCierre
-          ? financType === "Contado"
+          ? esTipoContado(financType)
             ? escrituraProyecto.toFixed(2)
             : ESCRITURA_CONTADO.toFixed(2)
           : "",
@@ -1734,7 +1762,7 @@ export function FinanciamientoContent({ id }: { id: string }) {
   function quitarFilaEntrada(indice: number) {
     const filaEliminada = entradasTabla[indice]
     const restante = entradasTabla.filter((_, i) => i !== indice)
-    if (financType === "Contado" || filaEliminada?.formaPago !== "Entrada") {
+    if (esTipoContado(financType) || filaEliminada?.formaPago !== "Entrada") {
       setEntradasTabla(restante)
       return
     }
@@ -1853,7 +1881,7 @@ export function FinanciamientoContent({ id }: { id: string }) {
       if (
         campo === "abonoLote" &&
         anterior[indice]?.formaPago === "Entrada" &&
-        financType !== "Contado"
+        !esTipoContado(financType)
       ) {
         return reajustarAbonoLoteEntradas(anterior, indice, valor)
       }
@@ -1912,7 +1940,7 @@ export function FinanciamientoContent({ id }: { id: string }) {
   // nunca la vuelve a tocar. "Crédito BIESS" no usa este mecanismo — su fila de
   // cierre ("Desembolso BIESS") es fija, ver el useEffect siguiente.
   useEffect(() => {
-    if (financType !== "Contado") return
+    if (!esTipoContado(financType)) return
     const sumaSinPagoTotal = entradasTabla.reduce(
       (acc, fila) =>
         acc + (fila.formaPago === "Pago total" ? 0 : Number(fila.abonoLote) || 0),
@@ -2008,9 +2036,17 @@ export function FinanciamientoContent({ id }: { id: string }) {
   // Cuota mensual sugerida por el sistema (fórmula estándar sobre el total a
   // financiar y el N.º de meses) — solo informativa, no se aplica sola; el botón
   // "Aplicar" la copia al campo "Cuota sugerida" para usarla como cuota fija.
+  // "Mixto": el desembolso BIESS sigue pendiente todo el plazo y paga interés cada mes.
+  const desembolsoPendienteMixto =
+    financType === "Mixto" ? Number(desembolsoValor) || 0 : 0
   const cuotaMensualSugerida = useMemo(
-    () => calcularCuotaMensualSugerida(saldoAFinanciar, Number(meses)),
-    [saldoAFinanciar, meses]
+    () =>
+      calcularCuotaMensualSugerida(
+        saldoAFinanciar,
+        Number(meses),
+        desembolsoPendienteMixto
+      ),
+    [saldoAFinanciar, meses, desembolsoPendienteMixto]
   )
 
   function agregarComentario() {
@@ -2102,6 +2138,16 @@ export function FinanciamientoContent({ id }: { id: string }) {
       })
       return false
     }
+    // "Crédito directo sin interés": el proyecto lo tiene que tener habilitado y ningún
+    // pago puede caer después de su fecha límite (el backend lo valida igual).
+    if (errorTipoSinInteres) {
+      toast({
+        variant: "error",
+        title: "No se puede usar este tipo de financiamiento",
+        description: errorTipoSinInteres,
+      })
+      return false
+    }
     if (!esContadoLike(financType) && (!Number(meses) || Number(meses) <= 0)) {
       toast({
         variant: "error",
@@ -2118,7 +2164,9 @@ export function FinanciamientoContent({ id }: { id: string }) {
     // vez de dejar que salga con "CAPITAL" en rojo/negativo.
     if (!esContadoLike(financType) && cuotaSugerida.trim() !== "") {
       const tasaMensual = TASA_INTERES_ANUAL_FIJA / 100 / 12
-      const interesPrimerMes = redondear(saldoAFinanciar * tasaMensual)
+      const interesPrimerMes = redondear(
+        (saldoAFinanciar + desembolsoPendienteMixto) * tasaMensual
+      )
       if (Number(cuotaSugerida) <= interesPrimerMes) {
         toast({
           variant: "error",
@@ -2148,10 +2196,10 @@ export function FinanciamientoContent({ id }: { id: string }) {
         extraDiscount: extraDiscount ? Number(extraDiscount) : undefined,
         promocionesIds: promocionesSeleccionadas,
         entradas,
+        // "Mixto": la fecha del desembolso no se manda — el backend la pone un mes
+        // después de la última cuota (fechaDesembolsoMixto).
         desembolso:
-          financType === "Mixto"
-            ? { monto: Number(desembolsoValor) || 0, fecha: desembolsoFecha }
-            : undefined,
+          financType === "Mixto" ? { monto: Number(desembolsoValor) || 0 } : undefined,
         meses: esContadoLike(financType) ? 0 : Number(meses),
         comentarios: comentarios.map((c) => c.trim()).filter((c) => c.length > 0),
         ofrecimientos,
@@ -2198,7 +2246,8 @@ export function FinanciamientoContent({ id }: { id: string }) {
           (Number(financiamiento.entrada) || 0) -
           (filaDesembolsoDe(financiamiento.detalle)?.capital ?? 0)
       ),
-      financiamiento.no_cuotas ?? 0
+      financiamiento.no_cuotas ?? 0,
+      filaDesembolsoDe(financiamiento.detalle)?.capital ?? 0
     )
     if (cuota != null) setCuotaSugerida(cuota.toFixed(2))
   }
@@ -2592,10 +2641,24 @@ export function FinanciamientoContent({ id }: { id: string }) {
                         <SelectField
                           label="Tipo financiamiento"
                           placeholder="Seleccione"
-                          options={TIPOS_FINANCIAMIENTO}
+                          options={tiposFinanciamientoParaProyecto(
+                            TIPOS_FINANCIAMIENTO,
+                            loteInfo?.proyecto,
+                            financType
+                          )}
                           value={financType}
                           onValueChange={manejarCambioFinancType}
                         />
+                        {financType === CREDITO_DIRECTO_SIN_INTERES &&
+                          (errorTipoSinInteres ? (
+                            <p className="text-destructive mt-1.5 text-xs font-medium">
+                              {errorTipoSinInteres}
+                            </p>
+                          ) : avisoSinInteres(loteInfo?.proyecto) ? (
+                            <p className="text-muted-foreground mt-1.5 text-xs">
+                              {avisoSinInteres(loteInfo?.proyecto)}
+                            </p>
+                          ) : null)}
                       </div>
                       <div className="col-span-2">
                         <div className="text-muted-foreground mb-1.5 text-xs font-bold tracking-wide">
@@ -2644,45 +2707,47 @@ export function FinanciamientoContent({ id }: { id: string }) {
                             value={desembolsoValor}
                             onChange={setDesembolsoValor}
                           />
-                          <div>
-                            <div className="text-muted-foreground mb-1.5 text-xs font-bold tracking-wide">
-                              Fecha de desembolso
-                            </div>
-                            <Popover
-                              open={calendarioDesembolsoAbierto}
-                              onOpenChange={setCalendarioDesembolsoAbierto}
-                            >
-                              <PopoverTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="border-input bg-card focus:border-primary focus:ring-ring/15 flex h-11 w-full items-center justify-between rounded-md border px-3.5 text-sm outline-none focus:ring-3"
-                                >
-                                  <span
-                                    className={cn(
-                                      !desembolsoFecha && "text-muted-foreground"
-                                    )}
+                          {financType === "Crédito BIESS" && (
+                            <div>
+                              <div className="text-muted-foreground mb-1.5 text-xs font-bold tracking-wide">
+                                Fecha de desembolso
+                              </div>
+                              <Popover
+                                open={calendarioDesembolsoAbierto}
+                                onOpenChange={setCalendarioDesembolsoAbierto}
+                              >
+                                <PopoverTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="border-input bg-card focus:border-primary focus:ring-ring/15 flex h-11 w-full items-center justify-between rounded-md border px-3.5 text-sm outline-none focus:ring-3"
                                   >
-                                    {desembolsoFecha
-                                      ? formatearFecha(desembolsoFecha)
-                                      : "Seleccione una fecha"}
-                                  </span>
-                                  <CalendarIcon
-                                    className="text-muted-foreground size-4 shrink-0"
-                                    strokeWidth={1.8}
+                                    <span
+                                      className={cn(
+                                        !desembolsoFecha && "text-muted-foreground"
+                                      )}
+                                    >
+                                      {desembolsoFecha
+                                        ? formatearFecha(desembolsoFecha)
+                                        : "Seleccione una fecha"}
+                                    </span>
+                                    <CalendarIcon
+                                      className="text-muted-foreground size-4 shrink-0"
+                                      strokeWidth={1.8}
+                                    />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent align="start" className="w-auto">
+                                  <CalendarioFechaDesembolso
+                                    value={desembolsoFecha}
+                                    onSelect={(fecha) => {
+                                      setDesembolsoFecha(fecha)
+                                      setCalendarioDesembolsoAbierto(false)
+                                    }}
                                   />
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent align="start" className="w-auto">
-                                <CalendarioFechaDesembolso
-                                  value={desembolsoFecha}
-                                  onSelect={(fecha) => {
-                                    setDesembolsoFecha(fecha)
-                                    setCalendarioDesembolsoAbierto(false)
-                                  }}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                          )}
                         </>
                       )}
                       {!esContadoLike(financType) && cuotaMensualSugerida != null && (
@@ -2727,7 +2792,8 @@ export function FinanciamientoContent({ id }: { id: string }) {
                           Aplicar descuento del 3%
                         </label>
                       )}
-                      {(esContadoLike(financType) ||
+                      {((esContadoLike(financType) &&
+                        financType !== CREDITO_DIRECTO_SIN_INTERES) ||
                         (financType === "Mixto" && aplicarDescuentoMixto)) && (
                         <StaticField
                           label="Descuento ($)"
@@ -3036,6 +3102,12 @@ export function FinanciamientoContent({ id }: { id: string }) {
                             type="number"
                             value={valorEntradaTotalGenerar}
                             onChange={setValorEntradaTotalGenerar}
+                            hint={
+                              Number(valorEntradaTotalGenerar) > 0 &&
+                              Number(abonoInicialGenerar) > 0
+                                ? `Incluye el abono inicial — se reparten ${formatearMoneda(valorEntradaTotalEfectivo)} en las entradas.`
+                                : undefined
+                            }
                             placeholder={
                               valorEntradaSugerido > 0
                                 ? `Sugerido: ${valorEntradaSugerido.toFixed(2)}`
@@ -3079,7 +3151,7 @@ export function FinanciamientoContent({ id }: { id: string }) {
                         />
                       </div>
                       <p className="text-muted-foreground mt-2 text-xs">
-                        {financType === "Contado"
+                        {esTipoContado(financType)
                           ? `El valor de las cuotas se calcula solo: total a financiar (${formatearMoneda(totalAFinanciar)}) menos el abono inicial, repartido en partes iguales; la última fila se agrega siempre como "Pago total". Usa "Regenerar entradas" en la barra inferior para generarlas.`
                           : financType === "Crédito BIESS"
                             ? `La última fila se agrega siempre como "Desembolso BIESS", con el valor y la fecha de desembolso que fijaste arriba. El resto — total a financiar (${formatearMoneda(totalAFinanciar)}) menos abono inicial menos desembolso — se reparte en partes iguales entre las demás cuotas. Usa "Regenerar entradas" en la barra inferior para generarlas.`
@@ -3094,7 +3166,7 @@ export function FinanciamientoContent({ id }: { id: string }) {
                 <div className="border-border overflow-hidden rounded-lg border">
                   <div className="border-border flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3.5 sm:px-4.5">
                     <div className="text-muted-foreground text-xs font-bold tracking-wide">
-                      {financType === "Contado"
+                      {esTipoContado(financType)
                         ? "TABLA DE FINANCIAMIENTO — abono inicial, cuotas y pago total"
                         : financType === "Crédito BIESS"
                           ? "TABLA DE FINANCIAMIENTO — abono inicial, cuotas y desembolso BIESS"

@@ -1,7 +1,7 @@
 "use client"
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
-import { Printer, Search } from "lucide-react"
+import { Search } from "lucide-react"
 
 import { DashboardTopbar } from "@/components/shared/dashboard-topbar"
 import { EmptyState } from "@/components/shared/empty-state"
@@ -9,6 +9,7 @@ import { KpiCard } from "@/components/shared/kpi-card"
 import { Spinner } from "@/components/shared/spinner"
 import { StatusBadge, type StatusVariant } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
+import { BotonImprimir } from "@/components/shared/boton-imprimir"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -174,15 +175,14 @@ export function ReporteVentasContent({ embebido = false }: { embebido?: boolean 
               Reporte general de ventas
             </h1>
           </div>
-          <Button
+          <BotonImprimir
             type="button"
             size="sm"
             className="no-print"
-            onClick={() => window.print()}
-          >
-            <Printer className="size-3.5" strokeWidth={1.8} />
-            Imprimir
-          </Button>
+            selector=".reporte-scroll"
+            nombreArchivo="Reporte de ventas"
+            horizontal
+          />
         </div>
 
         <div className="mb-4.5 grid grid-cols-2 gap-3.5 print:mb-[5px]! print:gap-1.5!">

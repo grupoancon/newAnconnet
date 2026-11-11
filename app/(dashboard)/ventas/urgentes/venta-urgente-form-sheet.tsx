@@ -160,7 +160,7 @@ export function VentaUrgenteFormSheet({
 
           <div>
             <label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
-              Motivo / mensaje *
+              Motivo / mensaje <span className="text-destructive">*</span>
             </label>
             <textarea
               value={mensaje}
