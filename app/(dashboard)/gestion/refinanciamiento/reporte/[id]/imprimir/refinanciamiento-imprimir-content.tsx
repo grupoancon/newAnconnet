@@ -17,6 +17,8 @@ import { SelectField } from "@/components/shared/select-field"
 import { Spinner } from "@/components/shared/spinner"
 import { Button } from "@/components/ui/button"
 import { BotonImprimir } from "@/components/shared/boton-imprimir"
+import { BotonPdfFirmado } from "@/components/shared/boton-pdf-firmado"
+import { SelloFirma } from "@/components/shared/sello-firma"
 import { Input } from "@/components/ui/input"
 import {
   InventarioApiError,
@@ -79,6 +81,8 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
   // refinanciamiento-reporte-content.tsx.
   const idNumero = Number(id)
   const puedeAprobar = useCan("refinanciamiento:aprobar")
+  // Recuadro de la firma electrónica en la vista previa (solo quien puede firmar).
+  const puedeFirmar = useCan("firma:firmar")
   const puedeCrear = useCan("refinanciamiento:crear")
   const puedeEditar = useCan("refinanciamiento:editar")
 
@@ -357,10 +361,21 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
           Volver
         </Button>
         {refinanciamiento && puedeImprimir && (
-          <BotonImprimir
-            selector=".anexo-imprimible"
-            nombreArchivo={`Refinanciamiento ${id}`}
-          />
+          <div className="flex items-center gap-2">
+            {/* Solo el reporte final se firma (un borrador/preaprobado sin firmas no). */}
+            {reporteFinal && (
+              <BotonPdfFirmado
+                selector=".anexo-imprimible"
+                nombreArchivo={`Refinanciamiento ${id} (firmado)`}
+                razon={`Refinanciamiento N° ${id}`}
+              />
+            )}
+            <BotonImprimir
+              selector=".anexo-imprimible"
+              nombreArchivo={`Refinanciamiento ${id}`}
+              firma={reporteFinal ? { razon: `Refinanciamiento N° ${id}` } : undefined}
+            />
+          </div>
         )}
       </div>
 
@@ -724,7 +739,7 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
             )}
 
             {reporteFinal && (
-              <div className="mt-16 flex flex-wrap justify-between gap-6">
+              <div className="mt-24 flex flex-wrap justify-between gap-6">
                 <Firma
                   nombre={apoderado ?? titular?.nombre ?? "—"}
                   rol={apoderado ? "APODERADO · C.C N°" : "C.C N°"}
@@ -732,6 +747,7 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
                 <Firma
                   nombre={representanteEmpresa || "—"}
                   rol="INMOCONSTRUCCIONES CIA. LTDA."
+                  sello={puedeFirmar}
                 />
                 {firmantesExtra
                   .filter((firmante) => firmante.nombre)
@@ -805,9 +821,32 @@ function Campo({ label, valor }: { label: string; valor: React.ReactNode }) {
   )
 }
 
-function Firma({ nombre, rol }: { nombre: string; rol: string }) {
+// `sello`: recuadro de la firma electrónica encima de la línea (solo el representante
+// de la empresa, que es quien firma con el certificado). Ver components/shared/sello-firma.tsx.
+function Firma({
+  nombre,
+  rol,
+  sello = false,
+}: {
+  nombre: string
+  rol: string
+  sello?: boolean
+}) {
   return (
-    <div className="w-64 text-center text-[11px]">
+    <div className="relative w-64 text-center text-[11px]">
+      {sello && (
+        // Centrado con calc (sin translate): así queda igual en pantalla y en la copia
+        // que captura html2canvas para el PDF.
+        <SelloFirma
+          className="absolute"
+          style={{
+            left: "calc(50% - 120px)",
+            bottom: "calc(100% + 2px)",
+            width: 240,
+            height: 60,
+          }}
+        />
+      )}
       <div className="mb-1 border-t border-black pt-1">{nombre}</div>
       {rol && <div className="font-bold">{rol}</div>}
     </div>

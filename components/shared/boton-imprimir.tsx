@@ -18,12 +18,13 @@ export function BotonImprimir({
 } & Omit<React.ComponentProps<typeof Button>, "onClick" | "children">) {
   const toast = useToast()
   const [generando, setGenerando] = useState(false)
-  const { selector, nombreArchivo, horizontal, disabled, ...propsBoton } = opciones
+  const { selector, nombreArchivo, horizontal, margen, firma, disabled, ...propsBoton } =
+    opciones
 
   async function manejarClick() {
     setGenerando(true)
     try {
-      await imprimirReporte({ selector, nombreArchivo, horizontal })
+      await imprimirReporte({ selector, nombreArchivo, horizontal, margen, firma })
     } catch (err) {
       toast({
         variant: "error",

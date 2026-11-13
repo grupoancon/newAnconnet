@@ -5,7 +5,9 @@ import { ArrowLeft, FileText, Plus, Trash2 } from "lucide-react"
 import { useRouter } from "@/lib/navigation"
 import { generarId } from "@/lib/utils"
 
+import { BotonPdfFirmado } from "@/components/shared/boton-pdf-firmado"
 import { useCan } from "@/components/shared/can"
+import { htmlSelloFirma } from "@/components/shared/sello-firma"
 import { DashboardTopbar } from "@/components/shared/dashboard-topbar"
 import { EmptyState } from "@/components/shared/empty-state"
 import { SelectField } from "@/components/shared/select-field"
@@ -84,7 +86,9 @@ const ALTO_HOJA_PX = 297 * MM_A_PX
 // para la vista previa en pantalla y para el .docx exportado, para que sean exactamente
 // lo mismo (html-to-docx convierte tablas de forma confiable; un layout con flex/grid de
 // CSS no se traduce bien a Word).
-function bloqueFirmaHtml(firmantes: Firmante[]): string {
+// `conSello` (solo vista previa, nunca el Word): recuadro de la firma electrónica sobre
+// la línea del primer representante de la empresa — ver components/shared/sello-firma.tsx.
+function bloqueFirmaHtml(firmantes: Firmante[], conSello = false): string {
   if (firmantes.length === 0) return ""
   // Ancho fijo en px, NO porcentaje — un <td style="width:XX%"> hace que html-to-docx
   // arme un nombre de elemento XML inválido al calcular el ancho de columna en OOXML
@@ -104,8 +108,16 @@ function bloqueFirmaHtml(firmantes: Firmante[]): string {
   // confiable de que la línea aparezca tanto en pantalla como en el Word exportado es
   // como texto real (guiones bajos), no como borde.
   const LINEA_FIRMA = "_______________________________"
+  const conElSello = conSello
+    ? firmantes.find((f) => f.tipo === "representante")
+    : undefined
   const celda = (f: Firmante) =>
-    `<td style="width:250px;padding:56px 16px 32px 16px;text-align:center;vertical-align:top;${SIN_BORDE}">` +
+    `<td style="width:250px;padding:56px 16px 32px 16px;text-align:center;vertical-align:top;${SIN_BORDE}${f === conElSello ? "position:relative;" : ""}">` +
+    (f === conElSello
+      ? htmlSelloFirma(
+          "position:absolute;left:50%;margin-left:-109px;top:2px;width:218px;height:52px;"
+        )
+      : "") +
     `<div style="font-size:15px;">${LINEA_FIRMA}</div>` +
     `<div style="font-weight:bold;font-size:13px;">${f.nombre.toUpperCase()}</div>` +
     (f.cedula ? `<div style="font-size:12px;">C.I. ${f.cedula}</div>` : "") +
@@ -125,6 +137,8 @@ export function ConvenioReporteContent({ id }: { id: string }) {
   // para generar el convenio de un proceso real) — sin este permiso no se puede ni ver
   // ni descargar el convenio, se bloquea toda la pantalla más abajo.
   const puedeVer = useCan("convenios:imprimir")
+  // Recuadro de la firma electrónica en la vista previa (solo quien puede firmar).
+  const puedeFirmar = useCan("firma:firmar")
 
   const [proceso, setProceso] = useState<ProcesoBackend | null>(null)
   const [oferta, setOferta] = useState<OfertaBackend | null>(null)
@@ -510,6 +524,14 @@ export function ConvenioReporteContent({ id }: { id: string }) {
                   <FileText className="size-3.5" strokeWidth={1.8} />
                   {generando ? "Generando..." : "Word"}
                 </Button>
+                <BotonPdfFirmado
+                  size="sm"
+                  selector=".convenio-contenido-pdf"
+                  margen={25.4}
+                  nombreArchivo={`convenio-${codigoLote} (firmado)`}
+                  razon={`Convenio del lote ${codigoLote}`}
+                  disabled={firmantes.length === 0 || generando || regenerando || !html}
+                />
               </div>
             </div>
 
@@ -693,7 +715,9 @@ export function ConvenioReporteContent({ id }: { id: string }) {
                   padding: "25.4mm",
                 }}
               >
-                <div>
+                {/* convenio-contenido-pdf: lo que captura "PDF firmado" (sin el
+                    padding de la hoja; los márgenes los pone el PDF en cada página). */}
+                <div className="convenio-contenido-pdf">
                   {html ? (
                     <div
                       className="convenio-preview max-w-none [&_h1]:mb-4 [&_h1]:text-[15pt] [&_h1]:font-bold [&_h2]:mt-5 [&_h2]:mb-2 [&_h2]:font-bold [&_li]:pl-1 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-10 [&_p]:mb-3 [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-10"
@@ -702,7 +726,9 @@ export function ConvenioReporteContent({ id }: { id: string }) {
                   ) : null}
                   {firmantes.length > 0 ? (
                     <div
-                      dangerouslySetInnerHTML={{ __html: bloqueFirmaHtml(firmantes) }}
+                      dangerouslySetInnerHTML={{
+                        __html: bloqueFirmaHtml(firmantes, puedeFirmar),
+                      }}
                     />
                   ) : (
                     <p className="mt-6 text-neutral-500">
