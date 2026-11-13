@@ -256,6 +256,18 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
   const listoParaImprimir = aprobado || estadoFinanciamiento === "ingresado"
   const puedeImprimir = listoParaImprimir && puedeAprobar
 
+  // Firmas al final de la última hoja impresa (no pegadas al texto): justo antes de
+  // imprimir se calcula el espacio que falta hasta el pie de esa hoja.
+  useEffect(() => {
+    if (!aprobado) return
+    window.addEventListener("beforeprint", ajustarFirmasAlFinal)
+    window.addEventListener("afterprint", restaurarFirmas)
+    return () => {
+      window.removeEventListener("beforeprint", ajustarFirmasAlFinal)
+      window.removeEventListener("afterprint", restaurarFirmas)
+    }
+  }, [aprobado])
+
   // Candidatos disponibles para agregar como firmantes extra — solo los que tienen
   // nombre cargado (vienen de la oferta del mismo proceso, no de financiamiento).
   // "tipo" evita agregarlos dos veces.
@@ -469,227 +481,238 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                 </div>
               </>
             )}
-            <div className="mb-5 text-center">
-              <div className="text-base font-bold">ANEXO</div>
-              <div className="text-base font-bold">FINANCIAMIENTO</div>
-            </div>
-
-            <div className="mb-5 rounded-md border border-gray-400 p-3 text-[11px]">
-              <div className="mb-2">
-                <span className="font-bold">CLIENTE: </span>
-                {titular?.nombre ?? "—"}
+            <div className="anexo-contenido">
+              <div className="mb-5 text-center">
+                <div className="text-base font-bold">ANEXO</div>
+                <div className="text-base font-bold">FINANCIAMIENTO</div>
               </div>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
-                <Campo label="FECHA" valor={formatearFecha(financiamiento.created_at)} />
-                <Campo
-                  label="TIPO DE FINANCIAMIENTO"
-                  valor={financiamiento.financ_type ?? "—"}
-                />
-                <Campo label="PROYECTO" valor={loteInfo?.proyecto?.nombre ?? "—"} />
-                <Campo
-                  label="INMUEBLE"
-                  valor={loteInfo?.codigo ?? proceso?.cli_lote ?? "—"}
-                />
-                <Campo
-                  label="VALOR DEL LOTE"
-                  valor={formatearNumero(loteInfo?.pvp ?? proceso?.lote_price)}
-                />
-                <Campo
-                  label="ÁREA (M²)"
-                  valor={formatearNumero(loteInfo?.areaUtil ?? proceso?.lote_mts)}
-                />
-                <Campo
-                  label="TOTAL A FINANCIAR"
-                  valor={formatearNumero(totalAFinanciar)}
-                />
-                {descuentosTotales > 0 && (
-                  <Campo label="DESCUENTO" valor={formatearNumero(descuentosTotales)} />
-                )}
-                {descuentoTipoInfo.anulado && (
+
+              <div className="mb-5 rounded-md border border-gray-400 p-3 text-[11px]">
+                <div className="mb-2">
+                  <span className="font-bold">CLIENTE: </span>
+                  {titular?.nombre ?? "—"}
+                </div>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
                   <Campo
-                    label={`DESCUENTO ${descuentoTipoInfo.porcentaje * 100}% ${(financiamiento.financ_type ?? "").toUpperCase()}`}
-                    valor={
-                      <>
-                        <s>{formatearNumero(descuentoTipoInfo.montoSinPromocion)}</s> (NO
-                        APLICA CON LA PROMOCIÓN)
-                      </>
-                    }
+                    label="FECHA"
+                    valor={formatearFecha(financiamiento.created_at)}
                   />
-                )}
-                <Campo
-                  label="OFRECIMIENTOS"
-                  valor={financiamiento.ofrecimientos || "—"}
-                />
-              </div>
-            </div>
-
-            <table className="mb-2 w-full border-collapse text-[11px]">
-              <thead>
-                <tr>
-                  <Th ancho="18%">Forma de Pago</Th>
-                  <Th ancho="14%">Fecha de Pago</Th>
-                  <Th ancho="14%">Abono al Lote</Th>
-                  {columnasAlicuotaEntrada.map((nombre, indice) => (
-                    <Th key={indice}>{nombre}</Th>
-                  ))}
-                  <Th ancho="14%">Escritura</Th>
-                  <Th ancho="14%">Total a Cancelar</Th>
-                  {hayObservacionesEntrada && <Th>Observaciones</Th>}
-                </tr>
-              </thead>
-              <tbody>
-                {entradas.map((fila, indice) => (
-                  <tr key={indice}>
-                    <Td>
-                      {(esTipoContado(financiamiento.financ_type ?? "") ||
-                        financiamiento.financ_type === "Crédito BIESS") &&
-                      fila.forma_pago === "Entrada"
-                        ? "Cuota"
-                        : fila.forma_pago || fila.concepto || "—"}
-                    </Td>
-                    <Td>{formatearFecha(fila.fecha_pago || fila.fecha)}</Td>
-                    <Td alinear="right">
-                      {formatearNumero(fila.abono_lote ?? fila.monto)}
-                    </Td>
-                    {alicuotasDeFilaEntrada(fila).map((valor, indiceComponente) => (
-                      <Td key={indiceComponente} alinear="right">
-                        {valor ? formatearNumero(valor) : "-"}
-                      </Td>
-                    ))}
-                    <Td alinear="right">
-                      {fila.escritura ? formatearNumero(fila.escritura) : "-"}
-                    </Td>
-                    <Td alinear="right">{formatearNumero(fila.total_cancelar)}</Td>
-                    {hayObservacionesEntrada && (
-                      <Td>{fila.observaciones?.trim() || "-"}</Td>
-                    )}
-                  </tr>
-                ))}
-                <tr className="font-bold">
-                  <Td colSpan={2} alinear="center">
-                    Total
-                  </Td>
-                  <Td alinear="right">{formatearNumero(totalesEntrada.abono)}</Td>
-                  {alicuotaTotalPorColumnaEntrada.map((total, indice) => (
-                    <Td key={indice} alinear="right">
-                      {formatearNumero(total)}
-                    </Td>
-                  ))}
-                  <Td alinear="right">{formatearNumero(totalesEntrada.escritura)}</Td>
-                  <Td alinear="right">{formatearNumero(totalesEntrada.total)}</Td>
-                  {hayObservacionesEntrada && <Td />}
-                </tr>
-              </tbody>
-            </table>
-
-            {!esTipoContado(financiamiento.financ_type ?? "") &&
-              financiamiento.financ_type !== "Crédito BIESS" && (
-                <>
-                  <div className="mb-4 text-[11px] font-bold">
-                    Saldo a financiar: ${formatearNumero(saldoAFinanciar)}
-                  </div>
-
-                  <table className="amortizacion-tabla mb-4 w-full border-collapse text-[10.5px]">
-                    <thead>
-                      <tr>
-                        <Th ancho="5%">Mes</Th>
-                        <Th ancho="11%">Fecha de Pago</Th>
-                        <Th ancho="10%">Capital</Th>
-                        <Th ancho="10%">Interés</Th>
-                        <Th ancho="10%">Abono al Lote</Th>
-                        {columnasAlicuotaCronograma.map((nombre, indice) => (
-                          <Th key={indice}>{nombre}</Th>
-                        ))}
-                        <Th ancho="10%">Escritura</Th>
-                        <Th ancho="12%">Cuota a Cancelar</Th>
-                        <Th ancho="12%">Saldo de Capital</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cronograma.map((fila) => (
-                        <tr key={fila.mes}>
-                          <Td alinear="center">
-                            {fila.desembolso ? "DESEMBOLSO BIESS" : fila.mes}
-                          </Td>
-                          <Td alinear="center">{formatearFecha(fila.fecha)}</Td>
-                          <Td alinear="center">{formatearNumero(fila.capital)}</Td>
-                          <Td alinear="center">{formatearNumero(fila.interes)}</Td>
-                          <Td alinear="center">{formatearNumero(fila.abono)}</Td>
-                          {alicuotasDeFilaCronograma(fila).map(
-                            (valor, indiceComponente) => (
-                              <Td key={indiceComponente} alinear="center">
-                                {valor ? formatearNumero(valor) : "-"}
-                              </Td>
-                            )
-                          )}
-                          <Td alinear="center">
-                            {fila.escritura ? formatearNumero(fila.escritura) : "-"}
-                          </Td>
-                          <Td alinear="center" resaltar>
-                            {formatearNumero(fila.cuota)}
-                          </Td>
-                          <Td alinear="center">{formatearNumero(fila.saldo)}</Td>
-                        </tr>
-                      ))}
-                      <tr className="font-bold">
-                        <Td />
-                        <Td />
-                        <Td alinear="center">
-                          {formatearNumero(totalesCronograma.capital)}
-                        </Td>
-                        <Td alinear="center">
-                          {formatearNumero(totalesCronograma.interes)}
-                        </Td>
-                        <Td alinear="center">
-                          {formatearNumero(totalesCronograma.abono)}
-                        </Td>
-                        {alicuotaTotalPorColumnaCronograma.map((total, indice) => (
-                          <Td key={indice} alinear="center">
-                            {formatearNumero(total)}
-                          </Td>
-                        ))}
-                        <Td alinear="center">
-                          {formatearNumero(totalesCronograma.escritura)}
-                        </Td>
-                        <Td />
-                        <Td />
-                      </tr>
-                    </tbody>
-                  </table>
-                </>
-              )}
-
-            {comentarios.length > 0 && (
-              <div className="mb-10 text-[11px]">
-                <div className="mb-1 font-bold">OBSERVACIONES</div>
-                <div className="flex flex-col gap-1 pl-6">
-                  {comentarios.map((comentario, indice) => (
-                    <div key={indice}>- {comentario}</div>
-                  ))}
+                  <Campo
+                    label="TIPO DE FINANCIAMIENTO"
+                    valor={financiamiento.financ_type ?? "—"}
+                  />
+                  <Campo label="PROYECTO" valor={loteInfo?.proyecto?.nombre ?? "—"} />
+                  <Campo
+                    label="INMUEBLE"
+                    valor={loteInfo?.codigo ?? proceso?.cli_lote ?? "—"}
+                  />
+                  <Campo
+                    label="VALOR DEL LOTE"
+                    valor={formatearNumero(loteInfo?.pvp ?? proceso?.lote_price)}
+                  />
+                  <Campo
+                    label="ÁREA (M²)"
+                    valor={formatearNumero(loteInfo?.areaUtil ?? proceso?.lote_mts)}
+                  />
+                  <Campo
+                    label="TOTAL A FINANCIAR"
+                    valor={formatearNumero(totalAFinanciar)}
+                  />
+                  {descuentosTotales > 0 && (
+                    <Campo label="DESCUENTO" valor={formatearNumero(descuentosTotales)} />
+                  )}
+                  {descuentoTipoInfo.anulado && (
+                    <Campo
+                      label={`DESCUENTO ${descuentoTipoInfo.porcentaje * 100}% ${(financiamiento.financ_type ?? "").toUpperCase()}`}
+                      valor={
+                        <>
+                          <s>{formatearNumero(descuentoTipoInfo.montoSinPromocion)}</s>{" "}
+                          (NO APLICA CON LA PROMOCIÓN)
+                        </>
+                      }
+                    />
+                  )}
+                  <Campo
+                    label="OFRECIMIENTOS"
+                    valor={financiamiento.ofrecimientos || "—"}
+                  />
                 </div>
               </div>
-            )}
+
+              <table className="mb-2 w-full border-collapse text-[11px]">
+                <thead>
+                  <tr>
+                    <Th ancho="18%">Forma de Pago</Th>
+                    <Th ancho="14%">Fecha de Pago</Th>
+                    <Th ancho="14%">Abono al Lote</Th>
+                    {columnasAlicuotaEntrada.map((nombre, indice) => (
+                      <Th key={indice}>{nombre}</Th>
+                    ))}
+                    <Th ancho="14%">Escritura</Th>
+                    <Th ancho="14%">Total a Cancelar</Th>
+                    {hayObservacionesEntrada && <Th>Observaciones</Th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {entradas.map((fila, indice) => (
+                    <tr key={indice}>
+                      <Td>
+                        {(esTipoContado(financiamiento.financ_type ?? "") ||
+                          financiamiento.financ_type === "Crédito BIESS") &&
+                        fila.forma_pago === "Entrada"
+                          ? "Cuota"
+                          : fila.forma_pago || fila.concepto || "—"}
+                      </Td>
+                      <Td>{formatearFecha(fila.fecha_pago || fila.fecha)}</Td>
+                      <Td alinear="right">
+                        {formatearNumero(fila.abono_lote ?? fila.monto)}
+                      </Td>
+                      {alicuotasDeFilaEntrada(fila).map((valor, indiceComponente) => (
+                        <Td key={indiceComponente} alinear="right">
+                          {valor ? formatearNumero(valor) : "-"}
+                        </Td>
+                      ))}
+                      <Td alinear="right">
+                        {fila.escritura ? formatearNumero(fila.escritura) : "-"}
+                      </Td>
+                      <Td alinear="right">{formatearNumero(fila.total_cancelar)}</Td>
+                      {hayObservacionesEntrada && (
+                        <Td>{fila.observaciones?.trim() || "-"}</Td>
+                      )}
+                    </tr>
+                  ))}
+                  <tr className="font-bold">
+                    <Td colSpan={2} alinear="center">
+                      Total
+                    </Td>
+                    <Td alinear="right">{formatearNumero(totalesEntrada.abono)}</Td>
+                    {alicuotaTotalPorColumnaEntrada.map((total, indice) => (
+                      <Td key={indice} alinear="right">
+                        {formatearNumero(total)}
+                      </Td>
+                    ))}
+                    <Td alinear="right">{formatearNumero(totalesEntrada.escritura)}</Td>
+                    <Td alinear="right">{formatearNumero(totalesEntrada.total)}</Td>
+                    {hayObservacionesEntrada && <Td />}
+                  </tr>
+                </tbody>
+              </table>
+
+              {!esTipoContado(financiamiento.financ_type ?? "") &&
+                financiamiento.financ_type !== "Crédito BIESS" && (
+                  <>
+                    <div className="mb-4 text-[11px] font-bold">
+                      Saldo a financiar: ${formatearNumero(saldoAFinanciar)}
+                    </div>
+
+                    <table className="amortizacion-tabla mb-4 w-full border-collapse text-[10.5px]">
+                      <thead>
+                        <tr>
+                          <Th ancho="5%">Mes</Th>
+                          <Th ancho="11%">Fecha de Pago</Th>
+                          <Th ancho="10%">Capital</Th>
+                          <Th ancho="10%">Interés</Th>
+                          <Th ancho="10%">Abono al Lote</Th>
+                          {columnasAlicuotaCronograma.map((nombre, indice) => (
+                            <Th key={indice}>{nombre}</Th>
+                          ))}
+                          <Th ancho="10%">Escritura</Th>
+                          <Th ancho="12%">Cuota a Cancelar</Th>
+                          <Th ancho="12%">Saldo de Capital</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cronograma.map((fila) => (
+                          <tr key={fila.mes}>
+                            <Td alinear="center">
+                              {fila.desembolso ? "DESEMBOLSO BIESS" : fila.mes}
+                            </Td>
+                            <Td alinear="center">{formatearFecha(fila.fecha)}</Td>
+                            <Td alinear="center">{formatearNumero(fila.capital)}</Td>
+                            <Td alinear="center">{formatearNumero(fila.interes)}</Td>
+                            <Td alinear="center">{formatearNumero(fila.abono)}</Td>
+                            {alicuotasDeFilaCronograma(fila).map(
+                              (valor, indiceComponente) => (
+                                <Td key={indiceComponente} alinear="center">
+                                  {valor ? formatearNumero(valor) : "-"}
+                                </Td>
+                              )
+                            )}
+                            <Td alinear="center">
+                              {fila.escritura ? formatearNumero(fila.escritura) : "-"}
+                            </Td>
+                            <Td alinear="center" resaltar>
+                              {formatearNumero(fila.cuota)}
+                            </Td>
+                            <Td alinear="center">{formatearNumero(fila.saldo)}</Td>
+                          </tr>
+                        ))}
+                        <tr className="font-bold">
+                          <Td />
+                          <Td />
+                          <Td alinear="center">
+                            {formatearNumero(totalesCronograma.capital)}
+                          </Td>
+                          <Td alinear="center">
+                            {formatearNumero(totalesCronograma.interes)}
+                          </Td>
+                          <Td alinear="center">
+                            {formatearNumero(totalesCronograma.abono)}
+                          </Td>
+                          {alicuotaTotalPorColumnaCronograma.map((total, indice) => (
+                            <Td key={indice} alinear="center">
+                              {formatearNumero(total)}
+                            </Td>
+                          ))}
+                          <Td alinear="center">
+                            {formatearNumero(totalesCronograma.escritura)}
+                          </Td>
+                          <Td />
+                          <Td />
+                        </tr>
+                      </tbody>
+                    </table>
+                  </>
+                )}
+
+              {comentarios.length > 0 && (
+                <div className="mb-10 text-[11px]">
+                  <div className="mb-1 font-bold">OBSERVACIONES</div>
+                  <div className="flex flex-col gap-1 pl-6">
+                    {comentarios.map((comentario, indice) => (
+                      <div key={indice}>- {comentario}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {aprobado && (
-              <div className="mt-16 flex flex-wrap justify-between gap-6">
-                <Firma
-                  nombre={apoderado ?? titular?.nombre ?? "—"}
-                  rol={apoderado ? "APODERADO · C.C N°" : "C.C N°"}
-                />
-                <Firma
-                  nombre={representanteEmpresa || "—"}
-                  rol="INMOCONSTRUCCIONES CIA. LTDA."
-                />
-                {firmantesExtra
-                  .filter((firmante) => firmante.nombre)
-                  .map((firmante) => (
-                    <Firma
-                      key={firmante.id}
-                      nombre={firmante.nombre}
-                      rol={firmante.rol}
-                    />
-                  ))}
-              </div>
+              <>
+                {/* Al imprimir, su alto se calcula para que las firmas queden al final
+                    de la ÚLTIMA hoja (ver ajustarFirmasAlFinal). En pantalla es un
+                    espacio fijo. */}
+                <div className="firmas-espaciador h-16" aria-hidden />
+                <div className="pie-firmas flex flex-wrap justify-between gap-x-6 gap-y-10 pt-14">
+                  <Firma
+                    nombre={apoderado ?? titular?.nombre ?? "—"}
+                    rol={apoderado ? "APODERADO · C.C N°" : "C.C N°"}
+                  />
+                  <Firma
+                    nombre={representanteEmpresa || "—"}
+                    rol="INMOCONSTRUCCIONES CIA. LTDA."
+                  />
+                  {firmantesExtra
+                    .filter((firmante) => firmante.nombre)
+                    .map((firmante) => (
+                      <Firma
+                        key={firmante.id}
+                        nombre={firmante.nombre}
+                        rol={firmante.rol}
+                      />
+                    ))}
+                </div>
+              </>
             )}
           </div>
         </>
@@ -721,6 +744,17 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
         .amortizacion-tabla tr {
           break-inside: avoid;
         }
+        .pie-firmas {
+          break-inside: avoid;
+        }
+        /* Solo mientras se mide antes de imprimir: el ancho real del área impresa
+           (A4 menos los márgenes de @page). Ver ajustarFirmasAlFinal. */
+        .anexo-imprimible.midiendo-impresion {
+          width: ${ANCHO_IMPRESION_MM}mm !important;
+          max-width: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
         @media print {
           .no-print {
             display: none !important;
@@ -729,7 +763,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
             background: white !important;
           }
           @page {
-            margin: 1.8cm 1.5cm;
+            margin: ${MARGEN_VERTICAL_MM / 10}cm ${MARGEN_HORIZONTAL_MM / 10}cm;
           }
           .anexo-imprimible {
             margin: 0 !important;
@@ -740,6 +774,96 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
       `}</style>
     </div>
   )
+}
+
+// --- Firmas al final de la última hoja --------------------------------------------
+// CSS no sabe dónde termina cada hoja impresa, así que antes de imprimir se simula la
+// paginación: se mide el anexo con el ancho del área impresa y se reparte en hojas
+// del alto del área impresa. Las filas de tabla no se parten (pasan enteras a la hoja
+// siguiente, que además repite el encabezado de la tabla); el texto sí. Con eso se
+// sabe dónde termina el contenido en la última hoja y el espaciador ocupa lo que falta
+// para que las firmas queden a DISTANCIA_FIRMAS_PX del final. Si no entran, pasan a
+// una hoja nueva.
+const MARGEN_VERTICAL_MM = 18
+const MARGEN_HORIZONTAL_MM = 15
+const ANCHO_IMPRESION_MM = 210 - MARGEN_HORIZONTAL_MM * 2
+const PX_POR_MM = 96 / 25.4
+const ALTO_HOJA_PX = (297 - MARGEN_VERTICAL_MM * 2) * PX_POR_MM
+const DISTANCIA_FIRMAS_PX = 190
+// Espacio mínimo entre el final del texto y las firmas cuando caen en la misma hoja.
+const SEPARACION_MINIMA_PX = 40
+
+type PiezaPaginable = { el: Element; encabezado: number; partible: boolean }
+
+// Piezas en el orden en que se imprimen: filas de tabla (enteras, con el alto del
+// encabezado que se repite si saltan de hoja) y bloques de texto.
+function piezasPaginables(raiz: Element): PiezaPaginable[] {
+  const piezas: PiezaPaginable[] = []
+  for (const el of Array.from(raiz.children)) {
+    if (el instanceof HTMLTableElement) {
+      const thead = el.tHead
+      const altoEncabezado = thead?.getBoundingClientRect().height ?? 0
+      if (thead) piezas.push({ el: thead, encabezado: 0, partible: false })
+      for (const cuerpo of Array.from(el.tBodies)) {
+        for (const fila of Array.from(cuerpo.rows)) {
+          piezas.push({ el: fila, encabezado: altoEncabezado, partible: false })
+        }
+      }
+    } else if (el.children.length > 0 && el.getBoundingClientRect().height > 120) {
+      piezas.push(...piezasPaginables(el))
+    } else {
+      piezas.push({
+        el,
+        encabezado: 0,
+        partible: el.getBoundingClientRect().height > 120,
+      })
+    }
+  }
+  return piezas
+}
+
+function ajustarFirmasAlFinal() {
+  const anexo = document.querySelector<HTMLElement>(".anexo-imprimible")
+  const contenido = anexo?.querySelector<HTMLElement>(".anexo-contenido")
+  const espaciador = anexo?.querySelector<HTMLElement>(".firmas-espaciador")
+  const firmas = anexo?.querySelector<HTMLElement>(".pie-firmas")
+  if (!anexo || !contenido || !espaciador || !firmas) return
+
+  anexo.classList.add("midiendo-impresion")
+  espaciador.style.height = "0px"
+  try {
+    const origen = contenido.getBoundingClientRect().top
+    // Lo que se corre hacia abajo todo lo siguiente por las filas que saltan de hoja.
+    let desfase = 0
+    for (const { el, encabezado, partible } of piezasPaginables(contenido)) {
+      const r = el.getBoundingClientRect()
+      if (partible || r.height === 0 || r.height > ALTO_HOJA_PX) continue
+      const arriba = r.top - origen + desfase
+      const finHoja = (Math.floor(arriba / ALTO_HOJA_PX) + 1) * ALTO_HOJA_PX
+      if (arriba + r.height > finHoja) desfase += finHoja - arriba + encabezado
+    }
+    // Desde el espaciador (en 0) y no desde el final del contenido: así entra el
+    // margen inferior del último bloque, que queda entre el texto y las firmas.
+    const finContenido = espaciador.getBoundingClientRect().top - origen + desfase
+    const altoFirmas = firmas.getBoundingClientRect().height
+
+    let finFirmas =
+      (Math.floor(finContenido / ALTO_HOJA_PX) + 1) * ALTO_HOJA_PX - DISTANCIA_FIRMAS_PX
+    if (finFirmas - altoFirmas < finContenido + SEPARACION_MINIMA_PX) {
+      finFirmas += ALTO_HOJA_PX
+    }
+    // Se resta 1px por redondeos: pasarse aunque sea un píxel manda las firmas solas
+    // a una hoja en blanco.
+    const alto = Math.max(0, Math.floor(finFirmas - altoFirmas - finContenido) - 1)
+    espaciador.style.height = `${alto}px`
+  } finally {
+    anexo.classList.remove("midiendo-impresion")
+  }
+}
+
+function restaurarFirmas() {
+  const espaciador = document.querySelector<HTMLElement>(".firmas-espaciador")
+  if (espaciador) espaciador.style.height = ""
 }
 
 // Una fila de la caja de datos superior — 1 o 2 pares label:valor, igual al anexo legacy.
