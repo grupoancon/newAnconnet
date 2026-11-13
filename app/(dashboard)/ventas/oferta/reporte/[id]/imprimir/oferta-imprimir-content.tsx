@@ -12,6 +12,9 @@ import { Spinner } from "@/components/shared/spinner"
 import { useToast } from "@/components/shared/toast-provider"
 import { Button } from "@/components/ui/button"
 import { BotonImprimir } from "@/components/shared/boton-imprimir"
+import { BotonPdfFirmado } from "@/components/shared/boton-pdf-firmado"
+import { useCan } from "@/components/shared/can"
+import { SelloFirma } from "@/components/shared/sello-firma"
 import { Input } from "@/components/ui/input"
 import {
   InventarioApiError,
@@ -94,6 +97,8 @@ type Firmante = { id: string; nombre: string; rol: string }
 
 export function OfertaImprimirContent({ id }: { id: string }) {
   const router = useRouter()
+  // Recuadro de la firma electrónica en la vista previa (solo quien puede firmar).
+  const puedeFirmar = useCan("firma:firmar")
   const toast = useToast()
   const idNumero = Number(id)
 
@@ -373,10 +378,20 @@ export function OfertaImprimirContent({ id }: { id: string }) {
           Volver
         </Button>
         {oferta && (
-          <BotonImprimir
-            selector=".reporte-imprimible"
-            nombreArchivo={`Oferta de compra ${id}`}
-          />
+          <div className="flex items-center gap-2">
+            <BotonPdfFirmado
+              selector=".reporte-imprimible"
+              margen={conMembrete ? 0 : undefined}
+              nombreArchivo={`Oferta de compra ${id} (firmado)`}
+              razon={`Oferta de compra N° ${id}`}
+            />
+            <BotonImprimir
+              selector=".reporte-imprimible"
+              margen={conMembrete ? 0 : undefined}
+              nombreArchivo={`Oferta de compra ${id}`}
+              firma={{ razon: `Oferta de compra N° ${id}` }}
+            />
+          </div>
         )}
       </div>
 
@@ -823,7 +838,7 @@ export function OfertaImprimirContent({ id }: { id: string }) {
                 DEL INMUEBLE A SU NOMBRE
               </div>
 
-              <div className="mt-16 flex flex-wrap justify-between gap-6">
+              <div className="mt-24 flex flex-wrap justify-between gap-6">
                 <Firma
                   nombre={apoderado ?? titular?.nombre ?? "—"}
                   rol={apoderado ? "APODERADO · C.C N°" : "C.C N°"}
@@ -832,6 +847,7 @@ export function OfertaImprimirContent({ id }: { id: string }) {
                 <Firma
                   nombre={representanteEmpresa || "—"}
                   rol="INMOCONSTRUCCIONES CIA. LTDA."
+                  sello={puedeFirmar}
                 />
                 {firmantesExtra
                   .filter((firmante) => firmante.nombre)
@@ -873,6 +889,25 @@ export function OfertaImprimirContent({ id }: { id: string }) {
         .hoja-contenido {
           position: relative;
           z-index: 1;
+        }
+        /* PDF armado en el navegador ("PDF firmado" y el Imprimir del teléfono, ver
+           lib/imprimir-reporte.ts): no usa @media print, así que el membrete se pinta
+           con .modo-pdf. Cada hoja con membrete es un A4 exacto (210×297) con la misma
+           área segura que la impresión, en % del ancho (3cm / 1.6cm / 3.6cm de 21cm). */
+        .modo-pdf .hoja-con-membrete {
+          box-sizing: border-box;
+          aspect-ratio: 210 / 297;
+          padding: 14.29% 7.62% 17.14%;
+        }
+        .modo-pdf .hoja-membrete {
+          display: block;
+          position: absolute;
+          inset: 0;
+          background-image: url("/images/membrete-oferta.png");
+          background-position: top center;
+          background-repeat: no-repeat;
+          background-size: 100% 100%;
+          z-index: 0;
         }
         @media print {
           .no-print {
@@ -936,7 +971,11 @@ function Hoja({
   children: React.ReactNode
 }) {
   return (
-    <div className={["hoja", ultima && "hoja-ultima"].filter(Boolean).join(" ")}>
+    <div
+      className={["hoja", conMembrete && "hoja-con-membrete", ultima && "hoja-ultima"]
+        .filter(Boolean)
+        .join(" ")}
+    >
       {conMembrete && <div className="hoja-membrete" aria-hidden />}
       <div className="hoja-contenido">{children}</div>
     </div>
@@ -1057,9 +1096,32 @@ function Td({
   )
 }
 
-function Firma({ nombre, rol }: { nombre: string; rol: string }) {
+// `sello`: recuadro de la firma electrónica encima de la línea (solo el representante
+// de la empresa, que es quien firma con el certificado). Ver components/shared/sello-firma.tsx.
+function Firma({
+  nombre,
+  rol,
+  sello = false,
+}: {
+  nombre: string
+  rol: string
+  sello?: boolean
+}) {
   return (
-    <div className="w-40 text-center text-[10px]">
+    <div className="relative w-40 text-center text-[10px]">
+      {sello && (
+        // Centrado con calc (sin translate): así queda igual en pantalla y en la copia
+        // que captura html2canvas para el PDF.
+        <SelloFirma
+          className="absolute"
+          style={{
+            left: "calc(50% - 100px)",
+            bottom: "calc(100% + 2px)",
+            width: 200,
+            height: 60,
+          }}
+        />
+      )}
       <div className="mb-1 border-t border-black pt-1">{nombre}</div>
       {rol && <div className="font-bold">{rol}</div>}
     </div>

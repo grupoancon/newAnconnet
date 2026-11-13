@@ -12,6 +12,8 @@ import { SelectField } from "@/components/shared/select-field"
 import { Spinner } from "@/components/shared/spinner"
 import { Button } from "@/components/ui/button"
 import { BotonImprimir } from "@/components/shared/boton-imprimir"
+import { BotonPdfFirmado } from "@/components/shared/boton-pdf-firmado"
+import { SelloFirma } from "@/components/shared/sello-firma"
 import { Input } from "@/components/ui/input"
 import {
   InventarioApiError,
@@ -62,6 +64,8 @@ function formatearFecha(fecha: string | null | undefined): string {
 
 export function FinanciamientoImprimirContent({ id }: { id: string }) {
   const router = useRouter()
+  // Recuadro de la firma electrónica en la vista previa (solo quien puede firmar).
+  const puedeFirmar = useCan("firma:firmar")
   const idNumero = Number(id)
   const puedeAprobar = useCan("financiamiento:aprobar")
 
@@ -347,10 +351,18 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
           Volver
         </Button>
         {financiamiento && puedeImprimir && (
-          <BotonImprimir
-            selector=".anexo-imprimible"
-            nombreArchivo={`Financiamiento ${id}`}
-          />
+          <div className="flex items-center gap-2">
+            <BotonPdfFirmado
+              selector=".anexo-imprimible"
+              nombreArchivo={`Financiamiento ${id} (firmado)`}
+              razon={`Financiamiento N° ${id}`}
+            />
+            <BotonImprimir
+              selector=".anexo-imprimible"
+              nombreArchivo={`Financiamiento ${id}`}
+              firma={{ razon: `Financiamiento N° ${id}` }}
+            />
+          </div>
         )}
       </div>
 
@@ -876,9 +888,32 @@ function Campo({ label, valor }: { label: string; valor: React.ReactNode }) {
   )
 }
 
-function Firma({ nombre, rol }: { nombre: string; rol: string }) {
+// `sello`: recuadro de la firma electrónica encima de la línea (solo el representante
+// de la empresa, que es quien firma con el certificado). Ver components/shared/sello-firma.tsx.
+function Firma({
+  nombre,
+  rol,
+  sello = false,
+}: {
+  nombre: string
+  rol: string
+  sello?: boolean
+}) {
   return (
-    <div className="w-64 text-center text-[11px]">
+    <div className="relative w-64 text-center text-[11px]">
+      {sello && (
+        // Centrado con calc (sin translate): así queda igual en pantalla y en la copia
+        // que captura html2canvas para el PDF.
+        <SelloFirma
+          className="absolute"
+          style={{
+            left: "calc(50% - 120px)",
+            bottom: "calc(100% + 2px)",
+            width: 240,
+            height: 60,
+          }}
+        />
+      )}
       <div className="mb-1 border-t border-black pt-1">{nombre}</div>
       {rol && <div className="font-bold">{rol}</div>}
     </div>

@@ -450,3 +450,41 @@ input::-webkit-date-and-time-value {
     transform: rotate(-8deg);
   }
 }
+
+/* Recuadro "Firma electrónica" de la vista previa de oferta, financiamiento, refinanciamiento y convenio
+   (components/shared/sello-firma.tsx). Marca dónde se estampa el sello con QR del PDF
+   firmado; al generar ese PDF se oculta y en su lugar va la firma real. Colores fijos
+   (no tokens del tema): vive sobre la hoja blanca del documento. */
+.sello-firma-electronica {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1.5px dashed #2f6fb7;
+  border-radius: 4px;
+  background: rgba(47, 111, 183, 0.06);
+  color: #2f6fb7;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.15;
+  text-align: left;
+  pointer-events: none;
+  user-select: none;
+}
+.sello-firma-electronica svg {
+  flex-shrink: 0;
+}
+.sello-firma-electronica b {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+}
+.sello-firma-electronica small {
+  display: block;
+  font-size: 8.5px;
+  opacity: 0.8;
+}
+@media print {
+  .sello-firma-electronica {
+    visibility: hidden !important;
+  }
+}

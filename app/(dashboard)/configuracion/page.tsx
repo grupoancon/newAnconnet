@@ -1,5 +1,6 @@
 import {
   ChevronRight,
+  FileKey2,
   FileText,
   ShieldCheck,
   ShieldEllipsis,
@@ -44,6 +45,12 @@ const SECCIONES = [
     descripcion: "Crea roles y define qué puede hacer cada uno.",
     href: "/admin/roles",
     icon: ShieldCheck,
+  },
+  {
+    titulo: "Firma electrónica",
+    descripcion: "Certificado .p12 con el que se firman los documentos PDF.",
+    href: "/configuracion/firma-electronica",
+    icon: FileKey2,
   },
   {
     titulo: "Mantenimiento",
