@@ -12,9 +12,6 @@ import { Spinner } from "@/components/shared/spinner"
 import { useToast } from "@/components/shared/toast-provider"
 import { Button } from "@/components/ui/button"
 import { BotonImprimir } from "@/components/shared/boton-imprimir"
-import { BotonPdfFirmado } from "@/components/shared/boton-pdf-firmado"
-import { useCan } from "@/components/shared/can"
-import { SelloFirma } from "@/components/shared/sello-firma"
 import { Input } from "@/components/ui/input"
 import {
   InventarioApiError,
@@ -97,8 +94,6 @@ type Firmante = { id: string; nombre: string; rol: string }
 
 export function OfertaImprimirContent({ id }: { id: string }) {
   const router = useRouter()
-  // Recuadro de la firma electrónica en la vista previa (solo quien puede firmar).
-  const puedeFirmar = useCan("firma:firmar")
   const toast = useToast()
   const idNumero = Number(id)
 
@@ -379,17 +374,10 @@ export function OfertaImprimirContent({ id }: { id: string }) {
         </Button>
         {oferta && (
           <div className="flex items-center gap-2">
-            <BotonPdfFirmado
-              selector=".reporte-imprimible"
-              margen={conMembrete ? 0 : undefined}
-              nombreArchivo={`Oferta de compra ${id} (firmado)`}
-              razon={`Oferta de compra N° ${id}`}
-            />
             <BotonImprimir
               selector=".reporte-imprimible"
               margen={conMembrete ? 0 : undefined}
               nombreArchivo={`Oferta de compra ${id}`}
-              firma={{ razon: `Oferta de compra N° ${id}` }}
             />
           </div>
         )}
@@ -847,7 +835,6 @@ export function OfertaImprimirContent({ id }: { id: string }) {
                 <Firma
                   nombre={representanteEmpresa || "—"}
                   rol="INMOCONSTRUCCIONES CIA. LTDA."
-                  sello={puedeFirmar}
                 />
                 {firmantesExtra
                   .filter((firmante) => firmante.nombre)
@@ -890,7 +877,7 @@ export function OfertaImprimirContent({ id }: { id: string }) {
           position: relative;
           z-index: 1;
         }
-        /* PDF armado en el navegador ("PDF firmado" y el Imprimir del teléfono, ver
+        /* PDF armado en el navegador (el Imprimir del teléfono, ver
            lib/imprimir-reporte.ts): no usa @media print, así que el membrete se pinta
            con .modo-pdf. Cada hoja con membrete es un A4 exacto (210×297) con la misma
            área segura que la impresión, en % del ancho (3cm / 1.6cm / 3.6cm de 21cm). */
@@ -1096,32 +1083,9 @@ function Td({
   )
 }
 
-// `sello`: recuadro de la firma electrónica encima de la línea (solo el representante
-// de la empresa, que es quien firma con el certificado). Ver components/shared/sello-firma.tsx.
-function Firma({
-  nombre,
-  rol,
-  sello = false,
-}: {
-  nombre: string
-  rol: string
-  sello?: boolean
-}) {
+function Firma({ nombre, rol }: { nombre: string; rol: string }) {
   return (
-    <div className="relative w-40 text-center text-[10px]">
-      {sello && (
-        // Centrado con calc (sin translate): así queda igual en pantalla y en la copia
-        // que captura html2canvas para el PDF.
-        <SelloFirma
-          className="absolute"
-          style={{
-            left: "calc(50% - 100px)",
-            bottom: "calc(100% + 2px)",
-            width: 200,
-            height: 60,
-          }}
-        />
-      )}
+    <div className="w-40 text-center text-[10px]">
       <div className="mb-1 border-t border-black pt-1">{nombre}</div>
       {rol && <div className="font-bold">{rol}</div>}
     </div>

@@ -12,8 +12,6 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "firma:certificado-prueba": "tsx scripts/generar-certificado-prueba.ts",
-    "firma:lote": "tsx scripts/firmar-lote.ts",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio"

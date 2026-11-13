@@ -13,8 +13,6 @@
 // html2canvas-pro y jspdf se importan dentro de la función para que no entren al bundle
 // inicial: solo se descargan cuando alguien imprime desde el teléfono.
 
-import { FirmaClienteError, firmarPdfEnServidor } from "@/lib/firma-cliente"
-
 // Teléfono o tablet: pantalla táctil sin mouse/trackpad, o un navegador móvil. Una
 // computadora — aunque tenga la app instalada o pantalla táctil — sigue imprimiendo
 // directo con window.print(), como siempre.
@@ -37,11 +35,9 @@ export type OpcionesImprimir = {
   nombreArchivo: string
   horizontal?: boolean
   // Margen de la hoja en mm (8 por defecto). 0 cuando el contenedor ya es una hoja A4
-  // con sus propios márgenes (ej. el convenio), así las páginas coinciden con la vista.
+  // con sus propios márgenes (ej. la oferta con membrete), así las páginas coinciden
+  // con la vista.
   margen?: number
-  // Firma electrónica (PAdES) del PDF generado en el teléfono. Solo oferta,
-  // financiamiento, refinanciamiento y convenio la usan — ver lib/firma y app/api/firma.
-  firma?: { razon: string }
 }
 
 export async function imprimirReporte(opciones: OpcionesImprimir): Promise<void> {
@@ -49,17 +45,7 @@ export async function imprimirReporte(opciones: OpcionesImprimir): Promise<void>
     window.print()
     return
   }
-  const generado = await generarPdf(opciones)
-  let blob = generado.blob
-  if (opciones.firma) {
-    // Sin firma habilitada o sin permiso sale sin firmar, igual que antes.
-    blob = (
-      await firmarPdfEnServidor(blob, {
-        razon: opciones.firma.razon,
-        ...opcionesSello(generado.sello),
-      })
-    ).blob
-  }
+  const blob = await generarPdf(opciones)
   const nombre = opciones.nombreArchivo.endsWith(".pdf")
     ? opciones.nombreArchivo
     : `${opciones.nombreArchivo}.pdf`
@@ -88,55 +74,11 @@ function descargarBlob(blob: Blob, nombre: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
-// "PDF firmado" (computadora o teléfono): arma el PDF del reporte tal como se ve, lo firma
-// en el servidor con el certificado de la empresa y lo descarga. Si la firma no está
-// activada o el usuario no tiene permiso NO descarga nada y lanza el motivo: el botón
-// promete un PDF firmado.
-export async function descargarPdfFirmado(
-  opciones: OpcionesImprimir & { firma: { razon: string } }
-): Promise<void> {
-  const { blob: original, sello } = await generarPdf(opciones)
-  const resultado = await firmarPdfEnServidor(original, {
-    razon: opciones.firma.razon,
-    ...opcionesSello(sello),
-  })
-  if (!resultado.firmado) {
-    throw new FirmaClienteError(
-      resultado.motivo ?? "SIN_FIRMA",
-      resultado.motivo === "SIN_PERMISO"
-        ? "No tienes permiso para firmar documentos."
-        : "La firma electrónica no está activada (Configuración → Firma electrónica)."
-    )
-  }
-  const nombre = opciones.nombreArchivo.endsWith(".pdf")
-    ? opciones.nombreArchivo
-    : `${opciones.nombreArchivo}.pdf`
-  descargarBlob(resultado.blob, nombre)
-}
-
-// Rectángulo del sello de firma electrónica en el PDF, en puntos (1/72"), con el
-// origen abajo a la izquierda de la página — lo que espera /api/firma.
-export type PosicionSello = {
-  pagina: number
-  x: number
-  y: number
-  ancho: number
-  alto: number
-}
-
-const MM_A_PT = 72 / 25.4
-const COLOR_TESTIGO = "#ff00ff"
-const CLASE_SELLO = "sello-firma-electronica"
-
-function opcionesSello(sello: PosicionSello | null) {
-  return sello ? { visible: true, ...sello } : {}
-}
-
 async function generarPdf({
   selector,
   horizontal,
   margen = 8,
-}: OpcionesImprimir): Promise<{ blob: Blob; sello: PosicionSello | null }> {
+}: OpcionesImprimir): Promise<Blob> {
   const contenedor = document.querySelector<HTMLElement>(selector)
   if (!contenedor) throw new Error(`No se encontró el reporte (${selector}).`)
 
@@ -158,13 +100,12 @@ async function generarPdf({
   const hojas = Array.from(contenedor.querySelectorAll<HTMLElement>(".hoja"))
   const bloques = hojas.length > 0 ? hojas : [contenedor]
   let paginas = 0
-  let sello: PosicionSello | null = null
 
   for (const bloque of bloques) {
     // html2canvas dibuja una COPIA del documento. Para que esa copia use exactamente la
-    // misma fuente que la vista previa (si no, el texto cambia de largo, el final del
-    // documento queda afuera y el sello cae en otro lugar), se anota la fuente ya
-    // calculada de cada elemento y se fija en la copia.
+    // misma fuente que la vista previa (si no, el texto cambia de largo y el final del
+    // documento queda afuera), se anota la fuente ya calculada de cada elemento y se
+    // fija en la copia.
     const fuentes = new Map<string, [string, string, string, string]>()
     const vivos = [bloque, ...Array.from(bloque.querySelectorAll<HTMLElement>("*"))]
     vivos.forEach((el, i) => {
@@ -172,16 +113,6 @@ async function generarPdf({
       fuentes.set(String(i), [cs.fontFamily, cs.fontSize, cs.fontWeight, cs.fontStyle])
       el.dataset.pdfFuente = String(i)
     })
-
-    // Recuadro "Firma electrónica" (components/shared/sello-firma.tsx), medido sobre la
-    // copia que realmente se dibuja, relativo al bloque.
-    let marcaCss: {
-      x: number
-      y: number
-      w: number
-      h: number
-      anchoBloque: number
-    } | null = null
 
     let lienzo: HTMLCanvasElement
     try {
@@ -199,7 +130,7 @@ async function generarPdf({
         windowWidth: Math.max(bloque.scrollWidth, 820),
         // Sin `height` fijo: el alto sale de la copia (con overflow visible, ver
         // onclone), así se captura TODO el contenido aunque en la copia ocupe más que en
-        // pantalla — antes se cortaba el final (ej. las firmas del convenio).
+        // pantalla.
         windowHeight: Math.max(bloque.scrollHeight, window.innerHeight),
         onclone: (doc, copia) => {
           // Los reportes pueden dar estilos propios al PDF con `.modo-pdf` (ej. el
@@ -219,32 +150,6 @@ async function generarPdf({
             el.style.fontWeight = f[2]
             el.style.fontStyle = f[3]
           }
-          // El recuadro se pinta de un color testigo (magenta puro, sin texto ni borde)
-          // para ubicarlo después en la imagen capturada; luego se tapa con blanco y ahí
-          // va el sello real con QR. Se mide también por las dudas (respaldo).
-          const rCopia = copia.getBoundingClientRect()
-          copia.querySelectorAll<HTMLElement>(`.${CLASE_SELLO}`).forEach((el, i) => {
-            if (i > 0) {
-              el.style.visibility = "hidden"
-              return
-            }
-            const r = el.getBoundingClientRect()
-            if (r.width > 0) {
-              marcaCss = {
-                x: r.left - rCopia.left,
-                y: r.top - rCopia.top,
-                w: r.width,
-                h: r.height,
-                anchoBloque: rCopia.width,
-              }
-            }
-            el.innerHTML = ""
-            el.style.setProperty("background", COLOR_TESTIGO, "important")
-            el.style.setProperty("border", "none", "important")
-            el.style.setProperty("border-radius", "0", "important")
-            el.style.setProperty("box-shadow", "none", "important")
-            el.style.setProperty("opacity", "1", "important")
-          })
         },
       })
     } finally {
@@ -254,31 +159,8 @@ async function generarPdf({
     const pxPorMm = lienzo.width / anchoUtil
     const altoPaginaPx = Math.floor(altoUtil * pxPorMm)
 
-    // Recuadro en píxeles del lienzo.
-    const m = marcaCss as {
-      x: number
-      y: number
-      w: number
-      h: number
-      anchoBloque: number
-    } | null
-    const k = m && m.anchoBloque > 0 ? lienzo.width / m.anchoBloque : 1
-    // Lo que manda es dónde quedó el color testigo en la imagen; la medida es respaldo.
-    const marcaPx =
-      (m ? ubicarYBorrarTestigo(lienzo) : null) ??
-      (m ? { x: m.x * k, y: m.y * k, w: m.w * k, h: m.h * k } : null)
-
     for (let y = 0; y < lienzo.height;) {
-      let alto = altoDeCorte(lienzo, y, altoPaginaPx)
-      // Nunca partir el sello entre dos páginas: si el corte cae encima, se corta antes.
-      if (
-        marcaPx &&
-        marcaPx.y > y &&
-        marcaPx.y < y + alto &&
-        marcaPx.y + marcaPx.h > y + alto
-      ) {
-        alto = Math.floor(marcaPx.y) - y
-      }
+      const alto = altoDeCorte(lienzo, y, altoPaginaPx)
       const inicio = y
       y += alto
 
@@ -301,26 +183,10 @@ async function generarPdf({
         anchoUtil,
         alto / pxPorMm
       )
-
-      if (!sello && marcaPx && marcaPx.y >= inicio && marcaPx.y < inicio + alto) {
-        const anchoMm = marcaPx.w / pxPorMm
-        const altoMm = marcaPx.h / pxPorMm
-        const xMm = margen + marcaPx.x / pxPorMm
-        const arribaMm = margen + (marcaPx.y - inicio) / pxPorMm
-        sello = {
-          pagina: paginas,
-          x: redondear(xMm * MM_A_PT),
-          y: redondear((altoPagina - arribaMm - altoMm) * MM_A_PT),
-          ancho: redondear(anchoMm * MM_A_PT),
-          alto: redondear(altoMm * MM_A_PT),
-        }
-      }
     }
   }
-  return { blob: pdf.output("blob"), sello }
+  return pdf.output("blob")
 }
-
-const redondear = (n: number) => Math.round(n * 100) / 100
 
 // Alto del trozo que va en la página que empieza en `y`. Si no es la última, en vez de
 // cortar justo en el borde (y partir un renglón por la mitad) se sube hasta encontrar
@@ -344,46 +210,4 @@ function altoDeCorte(lienzo: HTMLCanvasElement, y: number, altoPaginaPx: number)
     if (blanca) return desde + fila + 1 - y
   }
   return altoPaginaPx
-}
-
-// Busca en el lienzo el rectángulo pintado con COLOR_TESTIGO (el recuadro de la firma),
-// lo tapa con blanco y devuelve su posición en píxeles del lienzo.
-function ubicarYBorrarTestigo(
-  lienzo: HTMLCanvasElement
-): { x: number; y: number; w: number; h: number } | null {
-  const ctx = lienzo.getContext("2d")
-  if (!ctx) return null
-  const franja = 256
-  let x0 = Infinity
-  let y0 = Infinity
-  let x1 = -1
-  let y1 = -1
-  for (let desde = 0; desde < lienzo.height; desde += franja) {
-    const alto = Math.min(franja, lienzo.height - desde)
-    const { data, width } = ctx.getImageData(0, desde, lienzo.width, alto)
-    for (let fila = 0; fila < alto; fila++) {
-      for (let x = 0; x < width; x++) {
-        const i = (fila * width + x) * 4
-        if (data[i]! >= 245 && data[i + 1]! <= 12 && data[i + 2]! >= 245) {
-          if (x < x0) x0 = x
-          if (x > x1) x1 = x
-          const y = desde + fila
-          if (y < y0) y0 = y
-          if (y > y1) y1 = y
-        }
-      }
-    }
-    // Ya se encontró y se pasó del recuadro: no hace falta seguir leyendo.
-    if (y1 >= 0 && desde > y1 + franja) break
-  }
-  if (x1 < 0) return null
-  // Se tapa con un margen de 2 px para cubrir los bordes suavizados (rosados).
-  // html2canvas deja el contexto con su escala (ej. ×2) aplicada: se trabaja en píxeles
-  // reales del lienzo, igual que getImageData.
-  ctx.save()
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
-  ctx.fillStyle = "#ffffff"
-  ctx.fillRect(x0 - 2, y0 - 2, x1 - x0 + 5, y1 - y0 + 5)
-  ctx.restore()
-  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 }
 }
