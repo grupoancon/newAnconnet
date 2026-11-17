@@ -39,6 +39,7 @@ import {
 import { descargarFinanciamientoExcel } from "@/lib/financiamiento-excel"
 import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import { cn } from "@/lib/utils"
+import { valorLoteFinanciamiento } from "@/lib/valor-lote-financiamiento"
 
 function formatearMoneda(valor: string | number | null | undefined): string {
   const numero = typeof valor === "string" ? parseFloat(valor) : valor
@@ -187,9 +188,13 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
   const titular = proceso?.titular ?? null
   const estado = normalizarEstado(proceso?.finan_status)
 
-  const valorLote = loteInfo?.pvp ?? proceso?.lote_price ?? null
-  const valorLoteNumero =
-    typeof valorLote === "string" ? parseFloat(valorLote) : (valorLote ?? 0)
+  const valorLote = valorLoteFinanciamiento({
+    financiamiento,
+    finanStatus: proceso?.finan_status,
+    pvpInventario: loteInfo?.pvp,
+    lotePriceProceso: proceso?.lote_price,
+  })
+  const valorLoteNumero = valorLote ?? 0
   // "Contado"/"Crédito BIESS" siempre llevan un descuento fijo (5%/3%, misma regla que
   // new/[id]) — si el registro quedó guardado sin el campo "discount", se recalcula
   // igual para mostrarlo.
@@ -362,7 +367,7 @@ export function FinanciamientoReporteContent({ id }: { id: string }) {
                   />
                   <StaticField
                     label="Valor del lote"
-                    value={formatearMoneda(loteInfo?.pvp ?? proceso?.lote_price)}
+                    value={formatearMoneda(valorLote)}
                     mono
                   />
                   <StaticField

@@ -35,6 +35,7 @@ import {
   listarRepresentantesActivos,
   type RepresentanteConvenio,
 } from "@/lib/api/convenios-api"
+import { valorLoteFinanciamiento } from "@/lib/valor-lote-financiamiento"
 
 // Mismo patrón que oferta-imprimir-content.tsx: un firmante extra de cliente (cónyuge,
 // apoderado, referido, cliente adicional, o nombre libre) — no de la empresa, esa va
@@ -152,9 +153,13 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
   // Con apoderado cargado en la oferta, firma él en lugar del cliente principal (mismo
   // criterio que el convenio); el titular queda como candidato para agregarlo aparte.
   const apoderado = oferta?.cli_representante?.trim() || null
-  const valorLote = loteInfo?.pvp ?? proceso?.lote_price ?? null
-  const valorLoteNumero =
-    typeof valorLote === "string" ? parseFloat(valorLote) : (valorLote ?? 0)
+  const valorLote = valorLoteFinanciamiento({
+    financiamiento,
+    finanStatus: proceso?.finan_status,
+    pvpInventario: loteInfo?.pvp,
+    lotePriceProceso: proceso?.lote_price,
+  })
+  const valorLoteNumero = valorLote ?? 0
   const entradas = financiamiento?.entradas ?? []
   // La columna de observaciones (lo que el asesor escribe al lado de cada fila en el
   // wizard) solo se muestra si alguna fila la tiene, para no dejar una columna vacía.
@@ -496,7 +501,7 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                   />
                   <Campo
                     label="VALOR DEL LOTE"
-                    valor={formatearNumero(loteInfo?.pvp ?? proceso?.lote_price)}
+                    valor={formatearNumero(valorLote)}
                   />
                   <Campo
                     label="ÁREA (M²)"

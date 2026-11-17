@@ -20,6 +20,7 @@ import type {
   ProcesoBackend,
   RefinanciamientoBackend,
 } from "@/lib/api/ventas-api"
+import { valorLoteFinanciamiento } from "@/lib/valor-lote-financiamiento"
 
 type Celda = string | number | null
 
@@ -181,7 +182,16 @@ export function construirHojasFinanciamiento({
   const esPerla =
     normalizar(nombreProyecto).includes("PERLA") || lote.toUpperCase().startsWith("PV-")
 
-  const valorLote = dinero(loteInfo?.pvp ?? proceso?.lote_price)
+  const valorLote = dinero(
+    valorLoteFinanciamiento({
+      // El refinanciamiento guarda total_financ con otra fórmula: ahí se sigue
+      // usando el precio del inventario como antes.
+      financiamiento: esRefinanciamiento ? null : financiamiento,
+      finanStatus: proceso?.finan_status,
+      pvpInventario: loteInfo?.pvp,
+      lotePriceProceso: proceso?.lote_price,
+    })
+  )
   const metros = dinero(loteInfo?.areaUtil ?? proceso?.lote_mts)
   // Misma regla que el reporte en pantalla: si el registro quedó sin "discount", el
   // descuento fijo de Contado (5%) / Crédito BIESS (3%) se recalcula.
