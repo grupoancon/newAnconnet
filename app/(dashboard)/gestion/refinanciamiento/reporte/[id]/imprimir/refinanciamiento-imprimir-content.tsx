@@ -262,8 +262,16 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
     descuentoTipo +
     (Number(refinanciamiento?.extra_discount) || 0) +
     (Number(refinanciamiento?.promo_discount) || 0)
-  // "TOTAL A FINANCIAR" del encabezado = valor del lote − todos los descuentos.
-  const totalAFinanciar = Math.max(0, valorLoteNumero - descuentosTotales)
+  // "TOTAL A FINANCIAR" del encabezado = valor del lote + adicionales − todos los
+  // descuentos − abono realizado − abono capital.
+  const totalAFinanciar = Math.max(
+    0,
+    valorLoteNumero +
+      (Number(refinanciamiento?.adicionales) || 0) -
+      descuentosTotales -
+      (Number(refinanciamiento?.abono_realizado) || 0) -
+      (Number(refinanciamiento?.abono_capital) || 0)
+  )
   // Qué se imprime según refinanciamiento.status (lib/refinanciamiento-estado.ts):
   // borrador → con la marca de agua BORRADOR (lo puede imprimir quien lo está
   // armando); guardado = preaprobado, y aprobado → el reporte final, sin marca de agua
@@ -559,17 +567,6 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
                 )}
                 {descuentosTotales > 0 && (
                   <Campo label="DESCUENTO" valor={formatearNumero(descuentosTotales)} />
-                )}
-                {descuentoTipoInfo.anulado && (
-                  <Campo
-                    label={`DESCUENTO ${descuentoTipoInfo.porcentaje * 100}% ${(refinanciamiento.financ_type ?? "").toUpperCase()}`}
-                    valor={
-                      <>
-                        <s>{formatearNumero(descuentoTipoInfo.montoSinPromocion)}</s> (NO
-                        APLICA CON LA PROMOCIÓN)
-                      </>
-                    }
-                  />
                 )}
                 <Campo
                   label="OFRECIMIENTOS"

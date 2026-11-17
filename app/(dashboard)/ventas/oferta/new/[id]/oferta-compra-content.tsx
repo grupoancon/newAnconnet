@@ -2673,9 +2673,14 @@ export function OfertaCompraContent({ id }: { id: string }) {
                         value={form.cli_contac}
                         onValueChange={(valor) => actualizarCampo("cli_contac", valor)}
                       />
-                      {form.cli_contac === "EXTERNO" && (
+                      {(form.cli_contac === "EXTERNO" ||
+                        form.cli_contac === "FAMILIAR ASESOR") && (
                         <TextField
-                          label="Nombre de la persona"
+                          label={
+                            form.cli_contac === "FAMILIAR ASESOR"
+                              ? "Nombre de la persona que refiere"
+                              : "Nombre de la persona"
+                          }
                           value={form.cli_contacNombre}
                           onChange={(valor) => actualizarCampo("cli_contacNombre", valor)}
                         />

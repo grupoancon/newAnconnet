@@ -1,10 +1,11 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   AlertTriangle,
   CalendarClock,
   CheckCircle2,
+  KeyRound,
   LogOut,
   MoreVertical,
   PackageCheck,
@@ -37,24 +38,31 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+  eliminarUsuarioApp,
+  listarUsuariosApp,
+  listarUsuariosAppEliminados,
+  reactivarUsuarioApp,
+} from "@/lib/api/app-usuarios-api"
+import { Spinner } from "@/components/shared/spinner"
 import { cn } from "@/lib/utils"
 
 import { CerrarSesionSheet, LoteEntregadoSheet } from "./acciones-usuario-app-sheets"
 import { AgregarUsuarioAppSheet } from "./agregar-usuario-app-sheet"
-import {
-  ESTADO_LABELS,
-  USUARIOS_ELIMINADOS_EJEMPLO,
-  USUARIOS_EJEMPLO,
-  type EstadoUsuarioApp,
-  type UsuarioApp,
-} from "./datos"
+import { ESTADO_LABELS, type EstadoUsuarioApp, type UsuarioApp } from "./datos"
 import { EditarUsuarioAppSheet } from "./editar-usuario-app-sheet"
-import { formatearFecha, iniciales } from "./formato"
+import { formatearFecha, iniciales, mensajeDeError } from "./formato"
 
 const POR_PAGINA = 8
 
 type Pestana = "todos" | "activo" | "eliminados"
 type FiltroReservas = "todos" | "si" | "faltantes"
+type FiltroPassword = "todos" | "pendiente" | "correo"
+
+const ETIQUETA_FILTRO_PASSWORD: Record<Exclude<FiltroPassword, "todos">, string> = {
+  pendiente: "Temporal sin cambiar",
+  correo: "Pidió por correo",
+}
 
 const VARIANTE_ESTADO: Record<EstadoUsuarioApp, StatusVariant> = {
   activo: "disponible",
@@ -68,15 +76,40 @@ const COLUMNAS =
 
 export function UsuariosAppContent() {
   const toast = useToast()
-  // PENDIENTE: reemplazar por la carga real (ver encabezado de ./datos.ts).
-  const usuarios = USUARIOS_EJEMPLO
-  const eliminados = USUARIOS_ELIMINADOS_EJEMPLO
+  const [usuarios, setUsuarios] = useState<UsuarioApp[]>([])
+  const [eliminados, setEliminados] = useState<UsuarioApp[]>([])
+  const [cargando, setCargando] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [reactivandoId, setReactivandoId] = useState<string | null>(null)
+
+  // Recarga ambas listas: casi toda acción mueve usuarios entre "activos" y
+  // "eliminados" o cambia sus lotes.
+  const cargar = useCallback(async () => {
+    try {
+      const [activos, borrados] = await Promise.all([
+        listarUsuariosApp(),
+        listarUsuariosAppEliminados(),
+      ])
+      setUsuarios(activos)
+      setEliminados(borrados)
+      setError(null)
+    } catch (err) {
+      setError(mensajeDeError(err))
+    } finally {
+      setCargando(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void cargar()
+  }, [cargar])
 
   const [pestana, setPestana] = useState<Pestana>("todos")
   const [busqueda, setBusqueda] = useState("")
   const [pagina, setPagina] = useState(1)
   const [proyectos, setProyectos] = useState<string[]>([])
   const [reservas, setReservas] = useState<FiltroReservas>("todos")
+  const [filtroPassword, setFiltroPassword] = useState<FiltroPassword>("todos")
   const [desde, setDesde] = useState("")
   const [hasta, setHasta] = useState("")
 
@@ -92,7 +125,10 @@ export function UsuariosAppContent() {
   )
 
   const filtrosActivos =
-    proyectos.length + (reservas !== "todos" ? 1 : 0) + (desde || hasta ? 1 : 0)
+    proyectos.length +
+    (reservas !== "todos" ? 1 : 0) +
+    (filtroPassword !== "todos" ? 1 : 0) +
+    (desde || hasta ? 1 : 0)
 
   const esEliminados = pestana === "eliminados"
   const fuente = esEliminados ? eliminados : usuarios
@@ -103,7 +139,7 @@ export function UsuariosAppContent() {
       if (pestana === "activo" && u.estado !== "activo") return false
       if (
         termino &&
-        ![u.nombre, u.cedula, ...u.lotes].some((campo) =>
+        ![u.nombre, u.cedula, u.email ?? "", ...u.lotes].some((campo) =>
           campo.toLowerCase().includes(termino)
         )
       ) {
@@ -114,12 +150,17 @@ export function UsuariosAppContent() {
       if (reservas === "faltantes" && !(u.requiereReservas && u.enReservas === false)) {
         return false
       }
-      const registro = new Date(u.fechaCreacion)
-      if (desde && registro < new Date(desde)) return false
-      if (hasta && registro > new Date(`${hasta}T23:59:59`)) return false
+      if (filtroPassword === "pendiente" && !u.passwordTemporalPendiente) return false
+      if (filtroPassword === "correo" && !u.resetCorreo) return false
+      if (desde || hasta) {
+        if (!u.fechaCreacion) return false
+        const registro = new Date(u.fechaCreacion)
+        if (desde && registro < new Date(`${desde}T00:00:00`)) return false
+        if (hasta && registro > new Date(`${hasta}T23:59:59`)) return false
+      }
       return true
     })
-  }, [fuente, pestana, busqueda, proyectos, reservas, desde, hasta])
+  }, [fuente, pestana, busqueda, proyectos, reservas, filtroPassword, desde, hasta])
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA))
   const paginaActual = Math.min(pagina, totalPaginas)
@@ -131,6 +172,7 @@ export function UsuariosAppContent() {
     faltanReservas: usuarios.filter((u) => u.requiereReservas && u.enReservas === false)
       .length,
     eliminados: eliminados.length,
+    passwordTemporal: usuarios.filter((u) => u.passwordTemporalPendiente).length,
   }
 
   function cambiarFiltro(aplicar: () => void) {
@@ -152,17 +194,37 @@ export function UsuariosAppContent() {
     cambiarFiltro(() => {
       setProyectos([])
       setReservas("todos")
+      setFiltroPassword("todos")
       setDesde("")
       setHasta("")
     })
   }
 
-  function avisoPendiente() {
-    toast({
-      variant: "info",
-      title: "Aún no disponible",
-      description: "Esta acción se conectará próximamente.",
-    })
+  async function reactivar(usuario: UsuarioApp) {
+    setReactivandoId(usuario.id)
+    try {
+      await reactivarUsuarioApp(usuario.id)
+      toast({ variant: "success", description: `${usuario.nombre} fue reactivado.` })
+      await cargar()
+    } catch (err) {
+      toast({ variant: "error", description: mensajeDeError(err) })
+    } finally {
+      setReactivandoId(null)
+    }
+  }
+
+  async function eliminar(usuario: UsuarioApp) {
+    setAEliminar(null)
+    try {
+      await eliminarUsuarioApp(usuario.id)
+      toast({
+        variant: "success",
+        description: `${usuario.nombre} fue eliminado y se cerraron sus sesiones en la app.`,
+      })
+      await cargar()
+    } catch (err) {
+      toast({ variant: "error", description: mensajeDeError(err) })
+    }
   }
 
   return (
@@ -170,13 +232,13 @@ export function UsuariosAppContent() {
       <DashboardTopbar />
 
       <div className="flex-1 space-y-4.5 overflow-y-auto p-4 sm:p-5 lg:p-6.5">
-        <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-5">
           <Kpi
             icono={<Smartphone className="text-accent-foreground size-[15px]" strokeWidth={1.6} />}
             fondoIcono="bg-accent"
             borde="border-l-primary"
             titulo="Usuarios"
-            valor={kpis.total}
+            valor={cargando ? "—" : kpis.total}
             detalle="Con cuenta en la app"
           />
           <Kpi
@@ -186,7 +248,7 @@ export function UsuariosAppContent() {
             fondoIcono="bg-status-disponible-bg"
             borde="border-l-status-disponible"
             titulo="Activos"
-            valor={kpis.activos}
+            valor={cargando ? "—" : kpis.activos}
             detalle="Pueden iniciar sesión"
           />
           <Kpi
@@ -196,15 +258,29 @@ export function UsuariosAppContent() {
             fondoIcono="bg-status-reservado-bg"
             borde="border-l-status-reservado"
             titulo="Faltan en reservas"
-            valor={kpis.faltanReservas}
+            valor={cargando ? "—" : kpis.faltanReservas}
             detalle="Lotes G-/F- sin registrar"
+          />
+          <Kpi
+            icono={<KeyRound className="text-status-hipotecado-fg size-[15px]" strokeWidth={1.6} />}
+            fondoIcono="bg-status-hipotecado-bg"
+            borde="border-l-status-hipotecado"
+            titulo="Contraseña temporal"
+            valor={cargando ? "—" : kpis.passwordTemporal}
+            detalle="Aún no la cambian"
+            onClick={() =>
+              cambiarFiltro(() => {
+                setPestana("todos")
+                setFiltroPassword("pendiente")
+              })
+            }
           />
           <Kpi
             icono={<Trash2 className="text-status-bloqueado-fg size-[15px]" strokeWidth={1.6} />}
             fondoIcono="bg-status-bloqueado-bg"
             borde="border-l-status-bloqueado"
             titulo="Eliminados"
-            valor={kpis.eliminados}
+            valor={cargando ? "—" : kpis.eliminados}
             detalle="Se pueden reactivar"
           />
         </div>
@@ -237,7 +313,7 @@ export function UsuariosAppContent() {
               <input
                 value={busqueda}
                 onChange={(event) => cambiarFiltro(() => setBusqueda(event.target.value))}
-                placeholder="Buscar por nombre, cédula o lote…"
+                placeholder="Buscar por nombre, cédula, correo o lote…"
                 className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none"
               />
             </div>
@@ -320,6 +396,22 @@ export function UsuariosAppContent() {
                   />
                 </div>
 
+                <div>
+                  <p className="text-muted-foreground mb-2 text-[11px] font-bold tracking-wide uppercase">
+                    Contraseña
+                  </p>
+                  <PillTabs
+                    className="w-full"
+                    tabs={[
+                      { id: "todos", label: "Todos" },
+                      { id: "pendiente", label: "Temporal" },
+                      { id: "correo", label: "Por correo" },
+                    ]}
+                    value={filtroPassword}
+                    onChange={(id) => cambiarFiltro(() => setFiltroPassword(id as FiltroPassword))}
+                  />
+                </div>
+
                 <Button
                   variant="ghost"
                   size="sm"
@@ -349,6 +441,11 @@ export function UsuariosAppContent() {
                   En reservas: {reservas === "si" ? "Sí" : "Faltantes"}
                 </ChipFiltro>
               ) : null}
+              {filtroPassword !== "todos" ? (
+                <ChipFiltro onQuitar={() => cambiarFiltro(() => setFiltroPassword("todos"))}>
+                  Contraseña: {ETIQUETA_FILTRO_PASSWORD[filtroPassword]}
+                </ChipFiltro>
+              ) : null}
               {desde || hasta ? (
                 <ChipFiltro
                   onQuitar={() =>
@@ -372,11 +469,25 @@ export function UsuariosAppContent() {
             </div>
           ) : null}
 
-          {visibles.length === 0 ? (
+          {cargando ? (
+            <div className="flex items-center justify-center py-16">
+              <Spinner />
+            </div>
+          ) : error ? (
+            <div className="p-4 sm:p-6.5">
+              <EmptyState title="No se pudieron cargar los usuarios" description={error} dashed />
+            </div>
+          ) : visibles.length === 0 ? (
             <div className="p-4 sm:p-6.5">
               <EmptyState
                 title="Sin resultados"
-                description="Ningún usuario coincide con la búsqueda o los filtros."
+                description={
+                  fuente.length === 0
+                    ? esEliminados
+                      ? "No hay usuarios eliminados."
+                      : "Todavía no hay usuarios en la app."
+                    : "Ningún usuario coincide con la búsqueda o los filtros."
+                }
               />
             </div>
           ) : (
@@ -424,6 +535,24 @@ export function UsuariosAppContent() {
                             </span>
                           ) : null}
                         </p>
+                        {!esEliminados && (usuario.passwordTemporalPendiente || usuario.resetCorreo) ? (
+                          <p
+                            className="text-status-hipotecado-fg mt-0.5 flex items-center gap-1 text-[11px] font-semibold"
+                            title={
+                              usuario.resetCorreo
+                                ? `Pidió una contraseña temporal por correo ${usuario.resetCorreo.total} ${usuario.resetCorreo.total === 1 ? "vez" : "veces"} (últimos 90 días)`
+                                : undefined
+                            }
+                          >
+                            <KeyRound className="size-3 shrink-0" strokeWidth={2} />
+                            {usuario.resetCorreo
+                              ? `Pidió por correo · ${formatearFecha(usuario.resetCorreo.ultima)}`
+                              : "Contraseña temporal"}
+                            {usuario.resetCorreo && !usuario.passwordTemporalPendiente
+                              ? " · ya la cambió"
+                              : ""}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
 
@@ -457,9 +586,17 @@ export function UsuariosAppContent() {
                     </span>
                     <span className="text-muted-foreground flex items-center gap-1 text-xs md:text-inherit">
                       <CalendarClock className="size-3.5 md:hidden" strokeWidth={1.7} />
-                      {formatearFecha(
-                        esEliminados ? usuario.fechaEliminacion : usuario.ultimaConexion
-                      )}
+                      <span>
+                        {formatearFecha(
+                          esEliminados ? usuario.fechaEliminacion : usuario.ultimaConexion
+                        )}
+                        {!esEliminados && usuario.sesionesAbiertas > 0 ? (
+                          <span className="text-muted-foreground block text-[11px]">
+                            {usuario.sesionesAbiertas}{" "}
+                            {usuario.sesionesAbiertas === 1 ? "sesión abierta" : "sesiones abiertas"}
+                          </span>
+                        ) : null}
+                      </span>
                     </span>
                     <span>
                       <StatusBadge variant={VARIANTE_ESTADO[usuario.estado]}>
@@ -469,9 +606,14 @@ export function UsuariosAppContent() {
 
                     <div className="justify-self-end">
                       {esEliminados ? (
-                        <Button variant="outline" size="sm" onClick={avisoPendiente}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={reactivandoId !== null}
+                          onClick={() => void reactivar(usuario)}
+                        >
                           <RotateCcw className="size-3.5" strokeWidth={1.8} />
-                          Reactivar
+                          {reactivandoId === usuario.id ? "Reactivando…" : "Reactivar"}
                         </Button>
                       ) : (
                         <DropdownMenu>
@@ -496,7 +638,7 @@ export function UsuariosAppContent() {
                             </DropdownMenuItem>
                             <DropdownMenuItem onSelect={() => setEnCierre(usuario)}>
                               <LogOut strokeWidth={1.8} />
-                              Cerrar sesión
+                              Sesiones
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -535,10 +677,12 @@ export function UsuariosAppContent() {
         open={agregarAbierto}
         onOpenChange={setAgregarAbierto}
         usuarios={usuarios}
+        onCreado={cargar}
       />
       <EditarUsuarioAppSheet
         usuario={enEdicion}
         onOpenChange={(abierto) => !abierto && setEnEdicion(null)}
+        onGuardado={cargar}
       />
       <LoteEntregadoSheet
         usuario={enEntrega}
@@ -547,16 +691,16 @@ export function UsuariosAppContent() {
       <CerrarSesionSheet
         usuario={enCierre}
         onOpenChange={(abierto) => !abierto && setEnCierre(null)}
+        onCerradas={cargar}
       />
       <ConfirmDialog
         abierto={aEliminar !== null}
         titulo={`¿Eliminar a ${aEliminar?.nombre ?? ""}?`}
-        descripcion='Pasará a la pestaña "Eliminados" y no podrá volver a iniciar sesión en la app. Se puede reactivar después.'
+        descripcion='Se cerrarán sus sesiones, sus lotes quedarán libres y pasará a la pestaña "Eliminados". Se puede reactivar después.'
         textoConfirmar="Eliminar"
         destructivo
         onConfirmar={() => {
-          setAEliminar(null)
-          avisoPendiente()
+          if (aEliminar) void eliminar(aEliminar)
         }}
         onCancelar={() => setAEliminar(null)}
       />
@@ -571,16 +715,27 @@ function Kpi({
   titulo,
   valor,
   detalle,
+  onClick,
 }: {
   icono: React.ReactNode
   fondoIcono: string
   borde: string
   titulo: string
-  valor: number
+  valor: number | string
   detalle: string
+  onClick?: () => void
 }) {
+  const Contenedor = onClick ? "button" : "div"
   return (
-    <div className={cn("bg-card border-border rounded-lg border border-l-[3px] p-4", borde)}>
+    <Contenedor
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className={cn(
+        "bg-card border-border rounded-lg border border-l-[3px] p-4 text-left",
+        onClick && "hover:bg-muted/40 cursor-pointer transition-colors",
+        borde
+      )}
+    >
       <div className="mb-2 flex items-center gap-2.5">
         <div className={cn("flex size-7.5 items-center justify-center rounded-md", fondoIcono)}>
           {icono}
@@ -589,7 +744,7 @@ function Kpi({
       </div>
       <div className="font-mono text-2xl font-semibold">{valor}</div>
       <div className="text-muted-foreground text-[11.5px]">{detalle}</div>
-    </div>
+    </Contenedor>
   )
 }
 

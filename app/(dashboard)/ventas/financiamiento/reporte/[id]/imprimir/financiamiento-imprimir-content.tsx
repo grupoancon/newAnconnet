@@ -256,18 +256,6 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
   const listoParaImprimir = aprobado || estadoFinanciamiento === "ingresado"
   const puedeImprimir = listoParaImprimir && puedeAprobar
 
-  // Firmas al final de la última hoja impresa (no pegadas al texto): justo antes de
-  // imprimir se calcula el espacio que falta hasta el pie de esa hoja.
-  useEffect(() => {
-    if (!aprobado) return
-    window.addEventListener("beforeprint", ajustarFirmasAlFinal)
-    window.addEventListener("afterprint", restaurarFirmas)
-    return () => {
-      window.removeEventListener("beforeprint", ajustarFirmasAlFinal)
-      window.removeEventListener("afterprint", restaurarFirmas)
-    }
-  }, [aprobado])
-
   // Candidatos disponibles para agregar como firmantes extra — solo los que tienen
   // nombre cargado (vienen de la oferta del mismo proceso, no de financiamiento).
   // "tipo" evita agregarlos dos veces.
@@ -521,17 +509,6 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
                   {descuentosTotales > 0 && (
                     <Campo label="DESCUENTO" valor={formatearNumero(descuentosTotales)} />
                   )}
-                  {descuentoTipoInfo.anulado && (
-                    <Campo
-                      label={`DESCUENTO ${descuentoTipoInfo.porcentaje * 100}% ${(financiamiento.financ_type ?? "").toUpperCase()}`}
-                      valor={
-                        <>
-                          <s>{formatearNumero(descuentoTipoInfo.montoSinPromocion)}</s>{" "}
-                          (NO APLICA CON LA PROMOCIÓN)
-                        </>
-                      }
-                    />
-                  )}
                   <Campo
                     label="OFRECIMIENTOS"
                     valor={financiamiento.ofrecimientos || "—"}
@@ -689,10 +666,8 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
 
             {aprobado && (
               <>
-                {/* Al imprimir, su alto se calcula para que las firmas queden al final
-                    de la ÚLTIMA hoja (ver ajustarFirmasAlFinal). En pantalla es un
-                    espacio fijo. */}
-                <div className="firmas-espaciador h-16" aria-hidden />
+                {/* Las firmas van seguidas del contenido (debajo de la tabla). */}
+                <div className="h-16" aria-hidden />
                 <div className="pie-firmas flex flex-wrap justify-between gap-x-6 gap-y-10 pt-14">
                   <Firma
                     nombre={apoderado ?? titular?.nombre ?? "—"}
@@ -747,14 +722,6 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
         .pie-firmas {
           break-inside: avoid;
         }
-        /* Solo mientras se mide antes de imprimir: el ancho real del área impresa
-           (A4 menos los márgenes de @page). Ver ajustarFirmasAlFinal. */
-        .anexo-imprimible.midiendo-impresion {
-          width: ${ANCHO_IMPRESION_MM}mm !important;
-          max-width: none !important;
-          padding: 0 !important;
-          margin: 0 !important;
-        }
         @media print {
           .no-print {
             display: none !important;
@@ -776,95 +743,9 @@ export function FinanciamientoImprimirContent({ id }: { id: string }) {
   )
 }
 
-// --- Firmas al final de la última hoja --------------------------------------------
-// CSS no sabe dónde termina cada hoja impresa, así que antes de imprimir se simula la
-// paginación: se mide el anexo con el ancho del área impresa y se reparte en hojas
-// del alto del área impresa. Las filas de tabla no se parten (pasan enteras a la hoja
-// siguiente, que además repite el encabezado de la tabla); el texto sí. Con eso se
-// sabe dónde termina el contenido en la última hoja y el espaciador ocupa lo que falta
-// para que las firmas queden a DISTANCIA_FIRMAS_PX del final. Si no entran, pasan a
-// una hoja nueva.
+// Márgenes de la hoja impresa (@page).
 const MARGEN_VERTICAL_MM = 18
 const MARGEN_HORIZONTAL_MM = 15
-const ANCHO_IMPRESION_MM = 210 - MARGEN_HORIZONTAL_MM * 2
-const PX_POR_MM = 96 / 25.4
-const ALTO_HOJA_PX = (297 - MARGEN_VERTICAL_MM * 2) * PX_POR_MM
-const DISTANCIA_FIRMAS_PX = 190
-// Espacio mínimo entre el final del texto y las firmas cuando caen en la misma hoja.
-const SEPARACION_MINIMA_PX = 40
-
-type PiezaPaginable = { el: Element; encabezado: number; partible: boolean }
-
-// Piezas en el orden en que se imprimen: filas de tabla (enteras, con el alto del
-// encabezado que se repite si saltan de hoja) y bloques de texto.
-function piezasPaginables(raiz: Element): PiezaPaginable[] {
-  const piezas: PiezaPaginable[] = []
-  for (const el of Array.from(raiz.children)) {
-    if (el instanceof HTMLTableElement) {
-      const thead = el.tHead
-      const altoEncabezado = thead?.getBoundingClientRect().height ?? 0
-      if (thead) piezas.push({ el: thead, encabezado: 0, partible: false })
-      for (const cuerpo of Array.from(el.tBodies)) {
-        for (const fila of Array.from(cuerpo.rows)) {
-          piezas.push({ el: fila, encabezado: altoEncabezado, partible: false })
-        }
-      }
-    } else if (el.children.length > 0 && el.getBoundingClientRect().height > 120) {
-      piezas.push(...piezasPaginables(el))
-    } else {
-      piezas.push({
-        el,
-        encabezado: 0,
-        partible: el.getBoundingClientRect().height > 120,
-      })
-    }
-  }
-  return piezas
-}
-
-function ajustarFirmasAlFinal() {
-  const anexo = document.querySelector<HTMLElement>(".anexo-imprimible")
-  const contenido = anexo?.querySelector<HTMLElement>(".anexo-contenido")
-  const espaciador = anexo?.querySelector<HTMLElement>(".firmas-espaciador")
-  const firmas = anexo?.querySelector<HTMLElement>(".pie-firmas")
-  if (!anexo || !contenido || !espaciador || !firmas) return
-
-  anexo.classList.add("midiendo-impresion")
-  espaciador.style.height = "0px"
-  try {
-    const origen = contenido.getBoundingClientRect().top
-    // Lo que se corre hacia abajo todo lo siguiente por las filas que saltan de hoja.
-    let desfase = 0
-    for (const { el, encabezado, partible } of piezasPaginables(contenido)) {
-      const r = el.getBoundingClientRect()
-      if (partible || r.height === 0 || r.height > ALTO_HOJA_PX) continue
-      const arriba = r.top - origen + desfase
-      const finHoja = (Math.floor(arriba / ALTO_HOJA_PX) + 1) * ALTO_HOJA_PX
-      if (arriba + r.height > finHoja) desfase += finHoja - arriba + encabezado
-    }
-    // Desde el espaciador (en 0) y no desde el final del contenido: así entra el
-    // margen inferior del último bloque, que queda entre el texto y las firmas.
-    const finContenido = espaciador.getBoundingClientRect().top - origen + desfase
-    const altoFirmas = firmas.getBoundingClientRect().height
-
-    let finFirmas =
-      (Math.floor(finContenido / ALTO_HOJA_PX) + 1) * ALTO_HOJA_PX - DISTANCIA_FIRMAS_PX
-    if (finFirmas - altoFirmas < finContenido + SEPARACION_MINIMA_PX) {
-      finFirmas += ALTO_HOJA_PX
-    }
-    // Se resta 1px por redondeos: pasarse aunque sea un píxel manda las firmas solas
-    // a una hoja en blanco.
-    const alto = Math.max(0, Math.floor(finFirmas - altoFirmas - finContenido) - 1)
-    espaciador.style.height = `${alto}px`
-  } finally {
-    anexo.classList.remove("midiendo-impresion")
-  }
-}
-
-function restaurarFirmas() {
-  const espaciador = document.querySelector<HTMLElement>(".firmas-espaciador")
-  if (espaciador) espaciador.style.height = ""
-}
 
 // Una fila de la caja de datos superior — 1 o 2 pares label:valor, igual al anexo legacy.
 function Campo({ label, valor }: { label: string; valor: React.ReactNode }) {

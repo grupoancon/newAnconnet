@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { AlertTriangle, ArrowLeft, ChevronRight, Search } from "lucide-react"
 
+import { Spinner } from "@/components/shared/spinner"
 import { TextField } from "@/components/shared/text-field"
 import { useToast } from "@/components/shared/toast-provider"
 import { Button } from "@/components/ui/button"
@@ -14,66 +15,129 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import {
+  crearUsuarioApp,
+  listarProcesosAprobados,
+  verificarProcesoAprobado,
+  type VerificacionProceso,
+} from "@/lib/api/app-usuarios-api"
 
-import { PROCESOS_EJEMPLO, type ProcesoAprobado, type UsuarioApp } from "./datos"
-import { formatearFecha } from "./formato"
+import type { ProcesoAprobado, UsuarioApp } from "./datos"
+import { formatearFecha, mensajeDeError } from "./formato"
 
 // Alta en dos pasos, igual que en la intranet anterior: (1) elegir la venta nueva
-// aprobada del cliente, (2) confirmar sus datos y definir usuario + contraseña temporal.
-// Al elegir el proceso, la versión real valida la orden de venta en SAP (lote +
-// cédula) y, si el cliente ya tiene cuenta, el lote se agrega a esa misma cuenta.
+// aprobada del cliente — al elegirla se valida en SAP que el lote tenga orden de
+// venta y que sea de ese cliente —, (2) confirmar sus datos y la contraseña temporal.
+// Si el cliente ya tiene cuenta, el lote se suma a esa misma cuenta. El backend
+// vuelve a validar todo al crear (no confía en lo que mande esta pantalla).
 export function AgregarUsuarioAppSheet({
   open,
   onOpenChange,
   usuarios,
+  onCreado,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   usuarios: UsuarioApp[]
+  onCreado: () => Promise<void> | void
 }) {
   const toast = useToast()
   const [paso, setPaso] = useState<"proceso" | "datos">("proceso")
   const [busqueda, setBusqueda] = useState("")
-  const [proceso, setProceso] = useState<ProcesoAprobado | null>(null)
-  const [usuario, setUsuario] = useState("")
+  const [procesos, setProcesos] = useState<ProcesoAprobado[]>([])
+  const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [verificandoId, setVerificandoId] = useState<number | null>(null)
+  const [verificacion, setVerificacion] = useState<VerificacionProceso | null>(null)
   const [password, setPassword] = useState("")
+  const [guardando, setGuardando] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setPaso("proceso")
     setBusqueda("")
-    setProceso(null)
+    setVerificacion(null)
+    setError(null)
+    setCargando(true)
+    let cancelado = false
+    listarProcesosAprobados()
+      .then((lista) => !cancelado && setProcesos(lista))
+      .catch((err) => !cancelado && setError(mensajeDeError(err)))
+      .finally(() => !cancelado && setCargando(false))
+    return () => {
+      cancelado = true
+    }
   }, [open])
+
+  // Lotes que ya tienen usuario en la app: se muestran, pero no se pueden elegir.
+  const lotesRegistrados = useMemo(
+    () => new Set(usuarios.flatMap((u) => u.lotes.map((l) => l.toUpperCase()))),
+    [usuarios]
+  )
 
   const procesosFiltrados = useMemo(() => {
     const termino = busqueda.trim().toLowerCase()
-    if (!termino) return PROCESOS_EJEMPLO
-    return PROCESOS_EJEMPLO.filter((p) =>
+    if (!termino) return procesos
+    return procesos.filter((p) =>
       [p.cliente, p.cedula, p.lote, p.asesor].some((campo) =>
         campo.toLowerCase().includes(termino)
       )
     )
-  }, [busqueda])
+  }, [busqueda, procesos])
 
-  const lotesExistentes = proceso
-    ? (usuarios.find((u) => u.cedula === proceso.cedula)?.lotes ?? [])
-    : []
-
-  function elegir(p: ProcesoAprobado) {
-    setProceso(p)
-    // Por defecto usuario y contraseña temporal son la cédula del cliente.
-    setUsuario(p.cedula)
-    setPassword(p.cedula)
-    setPaso("datos")
+  async function elegir(p: ProcesoAprobado) {
+    if (verificandoId !== null) return
+    if (!p.cedula) {
+      toast({ variant: "error", description: "Este proceso no tiene la cédula del cliente." })
+      return
+    }
+    setVerificandoId(p.processId)
+    try {
+      const resultado = await verificarProcesoAprobado(p.processId)
+      if (resultado.aviso) toast({ variant: "warning", description: resultado.aviso })
+      setVerificacion(resultado)
+      // Por defecto la contraseña temporal es la cédula del cliente.
+      setPassword(resultado.proceso.cedula)
+      setPaso("datos")
+    } catch (err) {
+      toast({ variant: "error", description: mensajeDeError(err) })
+    } finally {
+      setVerificandoId(null)
+    }
   }
 
-  function crear() {
-    toast({
-      variant: "info",
-      title: "Aún no disponible",
-      description: "La creación de usuarios de la app se conectará próximamente.",
-    })
+  async function crear() {
+    if (!verificacion) return
+    setGuardando(true)
+    try {
+      const r = await crearUsuarioApp({
+        processId: verificacion.proceso.processId,
+        tempPassword: password.trim(),
+      })
+      toast({
+        variant: "success",
+        description: r.esNuevo
+          ? `Usuario creado.${r.whatsappEnviado ? " Se le envió el aviso por WhatsApp." : ""}`
+          : `Lote ${verificacion.proceso.lote} agregado a la cuenta existente.`,
+      })
+      if (r.enReservas === false) {
+        toast({
+          variant: "warning",
+          description:
+            "No se pudo registrar el lote en el sistema de reservas. Aparecerá como faltante en el listado.",
+        })
+      }
+      await onCreado()
+      onOpenChange(false)
+    } catch (err) {
+      toast({ variant: "error", description: mensajeDeError(err) })
+    } finally {
+      setGuardando(false)
+    }
   }
+
+  const proceso = verificacion?.proceso
+  const cuentaExistente = (verificacion?.lotesExistentes.length ?? 0) > 0
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -84,7 +148,7 @@ export function AgregarUsuarioAppSheet({
           </SheetTitle>
           <SheetDescription>
             {paso === "proceso"
-              ? "Ventas nuevas aprobadas desde el 1 de agosto de 2026."
+              ? "Ventas nuevas aprobadas (oferta, financiamiento y pago)."
               : "Nuevo usuario para la app móvil."}
           </SheetDescription>
         </SheetHeader>
@@ -106,40 +170,62 @@ export function AgregarUsuarioAppSheet({
               </div>
             </div>
 
-            {procesosFiltrados.length === 0 ? (
+            {cargando ? (
+              <div className="flex items-center justify-center py-12">
+                <Spinner />
+              </div>
+            ) : error ? (
+              <p className="text-destructive px-5 py-10 text-center text-sm">{error}</p>
+            ) : procesosFiltrados.length === 0 ? (
               <p className="text-muted-foreground px-5 py-10 text-center text-sm">
                 No hay procesos aprobados que coincidan.
               </p>
             ) : (
               <ul>
-                {procesosFiltrados.map((p) => (
-                  <li key={p.processId} className="border-border border-b last:border-b-0">
-                    <button
-                      type="button"
-                      onClick={() => elegir(p)}
-                      className="hover:bg-muted/60 group flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-semibold">{p.cliente}</p>
-                        <p className="text-muted-foreground mt-0.5 text-xs">
-                          <span className="font-mono">{p.cedula}</span> · Lote{" "}
-                          <span className="font-mono">{p.lote}</span> · {p.asesor}
-                        </p>
-                      </div>
-                      <span className="text-muted-foreground shrink-0 text-xs">
-                        {formatearFecha(p.fechaCreacion)}
-                      </span>
-                      <ChevronRight
-                        className="text-muted-foreground group-hover:text-primary size-4 shrink-0 transition-colors"
-                        strokeWidth={1.8}
-                      />
-                    </button>
-                  </li>
-                ))}
+                {procesosFiltrados.map((p) => {
+                  const registrado = lotesRegistrados.has(p.lote.toUpperCase())
+                  const verificando = verificandoId === p.processId
+                  return (
+                    <li key={p.processId} className="border-border border-b last:border-b-0">
+                      <button
+                        type="button"
+                        disabled={registrado || verificandoId !== null}
+                        onClick={() => void elegir(p)}
+                        className="hover:bg-muted/60 group flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13px] font-semibold">
+                            {p.cliente || "Sin nombre"}
+                          </p>
+                          <p className="text-muted-foreground mt-0.5 text-xs">
+                            <span className="font-mono">{p.cedula || "sin cédula"}</span> ·
+                            Lote <span className="font-mono">{p.lote || "—"}</span> ·{" "}
+                            {p.asesor || "—"}
+                          </p>
+                        </div>
+                        <span className="text-muted-foreground shrink-0 text-xs">
+                          {registrado
+                            ? "Ya tiene usuario"
+                            : verificando
+                              ? "Verificando en SAP…"
+                              : formatearFecha(p.fechaCreacion)}
+                        </span>
+                        {verificando ? (
+                          <Spinner className="size-4 shrink-0" />
+                        ) : (
+                          <ChevronRight
+                            className="text-muted-foreground group-hover:text-primary size-4 shrink-0 transition-colors"
+                            strokeWidth={1.8}
+                          />
+                        )}
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>
-        ) : proceso ? (
+        ) : proceso && verificacion ? (
           <div className="space-y-4 p-5">
             <button
               type="button"
@@ -155,7 +241,14 @@ export function AgregarUsuarioAppSheet({
                 ["Nombre", proceso.cliente],
                 ["Cédula", proceso.cedula],
                 ["Lote", proceso.lote],
-                ["Orden SAP", "DocEntry 8812 · DocNum 10655"],
+                [
+                  "Orden SAP",
+                  verificacion.docNum
+                    ? `DocEntry ${verificacion.docEntry ?? "—"} · DocNum ${verificacion.docNum}`
+                    : "—",
+                ],
+                ["Correo", proceso.email || "—"],
+                ["Celular", proceso.celular || "—"],
               ].map(([etiqueta, valor]) => (
                 <div key={etiqueta} className="min-w-0">
                   <dt className="text-muted-foreground text-[10.5px] font-bold tracking-wide uppercase">
@@ -166,29 +259,31 @@ export function AgregarUsuarioAppSheet({
               ))}
             </dl>
 
-            {lotesExistentes.length > 0 ? (
-              <div className="bg-status-reservado-bg text-status-reservado-fg flex gap-2 rounded-md px-3 py-2.5 text-xs leading-relaxed">
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" strokeWidth={2} />
-                <p>
-                  Este cliente ya tiene cuenta en la app con{" "}
-                  {lotesExistentes.length > 1 ? "los lotes" : "el lote"}{" "}
-                  <strong>{lotesExistentes.join(", ")}</strong>. Si continúas, el lote{" "}
-                  <strong>{proceso.lote}</strong> se agregará a esa misma cuenta.
-                </p>
-              </div>
+            {verificacion.aviso ? (
+              <Aviso>{verificacion.aviso}</Aviso>
             ) : null}
 
-            <TextField label="Usuario" value={usuario} onChange={setUsuario} />
-            <div>
-              <TextField
-                label="Contraseña temporal"
-                value={password}
-                onChange={setPassword}
-              />
-              <p className="text-muted-foreground mt-1.5 text-xs">
-                Por defecto, la cédula del cliente. Se le pedirá cambiarla al entrar.
-              </p>
-            </div>
+            {cuentaExistente ? (
+              <Aviso>
+                Este cliente ya tiene cuenta en la app con{" "}
+                {verificacion.lotesExistentes.length > 1 ? "los lotes" : "el lote"}{" "}
+                <strong>{verificacion.lotesExistentes.join(", ")}</strong>. Si continúas, el
+                lote <strong>{proceso.lote}</strong> se agregará a esa misma cuenta (su
+                contraseña no cambia).
+              </Aviso>
+            ) : (
+              <div>
+                <TextField
+                  label="Contraseña temporal"
+                  value={password}
+                  onChange={setPassword}
+                />
+                <p className="text-muted-foreground mt-1.5 text-xs">
+                  El cliente entra con su cédula y esta contraseña (por defecto, la cédula).
+                  La app le pedirá cambiarla al entrar.
+                </p>
+              </div>
+            )}
           </div>
         ) : null}
 
@@ -197,12 +292,29 @@ export function AgregarUsuarioAppSheet({
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button size="sm" disabled={!usuario || !password} onClick={crear}>
-              Crear usuario
+            <Button
+              size="sm"
+              disabled={guardando || (!cuentaExistente && !password.trim())}
+              onClick={() => void crear()}
+            >
+              {guardando
+                ? "Guardando…"
+                : cuentaExistente
+                  ? "Agregar lote"
+                  : "Crear usuario"}
             </Button>
           </SheetFooter>
         ) : null}
       </SheetContent>
     </Sheet>
+  )
+}
+
+function Aviso({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="bg-status-reservado-bg text-status-reservado-fg flex gap-2 rounded-md px-3 py-2.5 text-xs leading-relaxed">
+      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" strokeWidth={2} />
+      <p>{children}</p>
+    </div>
   )
 }

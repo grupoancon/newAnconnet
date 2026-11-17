@@ -1,20 +1,21 @@
 import { redirect } from "next/navigation"
 
+import { can } from "@/lib/auth/rbac"
 import { getCurrentUser } from "@/lib/auth/session"
 
 import { UsuariosAppContent } from "./usuarios-app-content"
 
 export default async function UsuariosAppPage() {
-  // Igual que en la intranet anterior (RoleLayout permissions={[0]}): solo
-  // administradores. Cuando se conecte al backend, conviene un permiso propio
-  // (ej. "app:usuarios") en vez del rol.
+  // Mismo permiso que exige el backend (/app-usuarios, /users/force-logout,
+  // /users/lote-entregado): "app:usuarios". El API no le da bypass al Administrador,
+  // por eso prisma/sql/permiso_app_usuarios.sql se lo asigna.
   const usuario = await getCurrentUser()
 
   if (!usuario) {
     redirect("/api/auth/clear-session")
   }
 
-  if (!usuario.roles.includes("Administrador")) {
+  if (!can(usuario, "app", "usuarios")) {
     redirect("/sin-acceso?seccion=Usuarios de la app")
   }
 

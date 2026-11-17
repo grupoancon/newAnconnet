@@ -128,7 +128,7 @@ export const MEDIOS_VISITA: OpcionEncuesta[] = [
 
 export const ENCUESTADORES: OpcionEncuesta[] = [
   { value: "CRUZ PEREZ THAIS STEPHANY", label: "Thais Cruz" },
-  { value: "ALCAZAR SANTOS JHOANNA ELIZABETH", label: "Jhoanna Alcazar" },
+  { value: "ALCAZAR SANTOS JHOANNA ELIZABETH", label: "Jhoanna Alcázar" },
 ]
 
 export const ENCUESTADOR_OTRO = "OTRO"
