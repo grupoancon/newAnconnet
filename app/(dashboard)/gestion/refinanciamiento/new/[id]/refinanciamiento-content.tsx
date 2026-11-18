@@ -116,6 +116,10 @@ const DESCUENTO_BIESS_PORCENTAJE = 0.03
 // no este fijo.
 const ESCRITURA_CONTADO = 250
 
+// Fila fija de la tabla de entrada que sale del campo "Abono capital" (ver
+// filaAbonoCapital) — mismo nombre que usa el backend (conFilaAbonoCapital).
+const FORMA_PAGO_ABONO_CAPITAL = "Abono capital"
+
 // "Crédito BIESS (Sin Interés)" — solo existe en Refinanciamiento, no en
 // Financiamiento (ver TIPOS_REFINANCIAMIENTO más abajo) — es exactamente igual que
 // "Crédito BIESS" en todas sus reglas (misma estructura de tabla, mismo 3% de
@@ -246,6 +250,9 @@ function calcularCuotaMensualSugerida(
 ): number | null {
   if (!meses || meses <= 0 || !totalFinanciar || totalFinanciar <= 0) return null
   const tasaMensual = tasaAnual / 100 / 12
+  // Sin interés (tasa 0): la fórmula francesa da 0/0 — la cuota es el saldo
+  // repartido en partes iguales (mismo criterio que calcularCuotaBase en el backend).
+  if (tasaMensual === 0) return totalFinanciar / meses
   const factor = Math.pow(1 + tasaMensual, -meses)
   return (totalFinanciar * tasaMensual) / (1 - factor) + saldoDiferido * tasaMensual
 }
@@ -626,7 +633,7 @@ export function RefinanciamientoContent({ id }: { id: string }) {
 
   const [financType, setFinancType] = useState("Crédito directo")
   // A diferencia de Financiamiento (tasa siempre fija), acá el asesor puede ajustar la
-  // tasa anual de interés — arranca en la tasa fija de la empresa, editable. Vacío o 0
+  // tasa anual de interés — arranca en la tasa fija de la empresa, editable (0 = sin interés). Vacío
   // se interpreta como "usar la tasa fija" (mismo fallback que aplica el backend).
   const [tasaInteres, setTasaInteres] = useState(String(TASA_INTERES_ANUAL_FIJA))
   // Los tres ajustes propios de refinanciamiento sobre el valor del lote — se digitan
@@ -637,6 +644,16 @@ export function RefinanciamientoContent({ id }: { id: string }) {
   // valorLoteNumero más abajo, donde se aplican los tres sobre el PVP bruto del lote.
   const [abonoRealizado, setAbonoRealizado] = useState("")
   const [abonoCapital, setAbonoCapital] = useState("")
+  // El abono capital va como su propia fila ("Abono capital") en la tabla de entrada
+  // — no se guarda en entradasTabla (las regeneraciones de esa tabla la pisarían),
+  // se arma aparte en filaAbonoCapital. Esta es su fecha (hoy, o la guardada).
+  const [fechaAbonoCapital, setFechaAbonoCapital] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  )
+  const [observacionesAbonoCapital, setObservacionesAbonoCapital] = useState("")
+  // Alícuota opcional de la fila "Abono capital" — por defecto $0, el asesor la
+  // escribe si quiere cobrarla junto con el abono.
+  const [alicuotaAbonoCapital, setAlicuotaAbonoCapital] = useState("")
   const [adicionales, setAdicionales] = useState("")
   const [discount, setDiscount] = useState("")
   // Solo "Mixto": a diferencia de Contado/Crédito BIESS, el 3% no es obligatorio —
@@ -893,6 +910,18 @@ export function RefinanciamientoContent({ id }: { id: string }) {
                 observaciones: fila.observaciones ?? "",
               }))
               .filter((fila) => {
+                // "Abono capital" se arma aparte (filaAbonoCapital), a partir del
+                // campo abono capital — acá solo se recuperan su fecha/observaciones.
+                if (fila.formaPago === FORMA_PAGO_ABONO_CAPITAL) {
+                  if (fila.fechaPago) setFechaAbonoCapital(fila.fechaPago.slice(0, 10))
+                  setObservacionesAbonoCapital(fila.observaciones)
+                  const alicuotaGuardada = fila.alicuotas.reduce(
+                    (acc, c) => acc + (Number(c.valor) || 0),
+                    0
+                  )
+                  setAlicuotaAbonoCapital(alicuotaGuardada > 0 ? String(alicuotaGuardada) : "")
+                  return false
+                }
                 if (fila.formaPago === "Pago total") return esTipoContado(tipoCargado)
                 if (fila.formaPago === "Desembolso BIESS") {
                   return usaDesembolsoBiess(tipoCargado)
@@ -1018,15 +1047,23 @@ export function RefinanciamientoContent({ id }: { id: string }) {
   // de acá el resto de la pantalla es idéntico a financiamiento-content.tsx: todas las
   // fórmulas que ya usaban "valorLoteNumero" siguen igual, solo cambia de qué valor
   // parten.
+  // El abono capital NO resta acá: va como fila "Abono capital" en la tabla de
+  // entrada (ver filaAbonoCapital) y resta del saldo como cualquier otra entrada.
   const valorLoteNumero = Math.max(
     0,
-    valorLoteBruto + adicionalesNumero - abonoRealizadoNumero - abonoCapitalNumero
+    valorLoteBruto + adicionalesNumero - abonoRealizadoNumero
   )
   // Tasa que efectivamente se usa para calcular/mostrar el cronograma — la que
   // digitó el asesor, o la tasa fija de la empresa si la dejó vacía o en 0 (mismo
   // fallback que aplica el backend, ver RefinanciamientoService).
+  // 0 es válido (refinanciamiento sin interés): solo el campo vacío/inválido cae a
+  // la tasa fija.
   const tasaAnualEfectiva =
-    Number(tasaInteres) > 0 ? Number(tasaInteres) : TASA_INTERES_ANUAL_FIJA
+    tasaInteres.trim() !== "" &&
+    Number.isFinite(Number(tasaInteres)) &&
+    Number(tasaInteres) >= 0
+      ? Number(tasaInteres)
+      : TASA_INTERES_ANUAL_FIJA
   // Escritura configurada en el proyecto del lote — "Contado" la usa tal cual en su
   // fila de cierre ("Pago total", ver calcularFilasEntradaGeneradas/agregarFilaEntrada);
   // "Crédito BIESS" no, sigue con el monto fijo ESCRITURA_CONTADO en la suya.
@@ -1144,18 +1181,35 @@ export function RefinanciamientoContent({ id }: { id: string }) {
   // La "entrada" que reduce el saldo a financiar es solo la suma de "abono lote"
   // (la alícuota comunal es un cargo aparte, no se aplica al lote).
   const entradaTotal = useMemo(
-    () => entradasTabla.reduce((acc, fila) => acc + (Number(fila.abonoLote) || 0), 0),
-    [entradasTabla]
+    () =>
+      abonoCapitalNumero +
+      entradasTabla.reduce((acc, fila) => acc + (Number(fila.abonoLote) || 0), 0),
+    [entradasTabla, abonoCapitalNumero]
   )
+
+  // Fila fija "Abono capital" de la tabla de entrada — sale del campo "Abono capital"
+  // de arriba (solo lectura en la tabla) y se manda al backend como una fila más.
+  const filaAbonoCapital: FilaEntradaTabla | null =
+    abonoCapitalNumero > 0
+      ? {
+          formaPago: FORMA_PAGO_ABONO_CAPITAL,
+          fechaPago: fechaAbonoCapital,
+          abonoLote: abonoCapitalNumero.toFixed(2),
+          alicuotas: [{ nombre: "Alicuota", valor: alicuotaAbonoCapital, fechaInicio: null }],
+          escritura: "",
+          observaciones: observacionesAbonoCapital,
+        }
+      : null
 
   const alicuotaComunalTotal = useMemo(
     () =>
+      (abonoCapitalNumero > 0 ? Number(alicuotaAbonoCapital) || 0 : 0) +
       entradasTabla.reduce(
         (acc, fila) =>
           acc + fila.alicuotas.reduce((subacc, c) => subacc + (Number(c.valor) || 0), 0),
         0
       ),
-    [entradasTabla]
+    [entradasTabla, abonoCapitalNumero, alicuotaAbonoCapital]
   )
 
   // Nombres de las columnas de alícuota a mostrar en la tabla de entrada — de la
@@ -1182,13 +1236,15 @@ export function RefinanciamientoContent({ id }: { id: string }) {
   // índice con columnasAlicuota.
   const alicuotaComunalTotalPorColumna = useMemo(
     () =>
-      columnasAlicuota.map((_, indice) =>
-        entradasTabla.reduce(
-          (acc, fila) => acc + (Number(fila.alicuotas[indice]?.valor) || 0),
-          0
-        )
+      columnasAlicuota.map(
+        (_, indice) =>
+          (indice === 0 && abonoCapitalNumero > 0 ? Number(alicuotaAbonoCapital) || 0 : 0) +
+          entradasTabla.reduce(
+            (acc, fila) => acc + (Number(fila.alicuotas[indice]?.valor) || 0),
+            0
+          )
       ),
-    [entradasTabla, columnasAlicuota]
+    [entradasTabla, columnasAlicuota, abonoCapitalNumero, alicuotaAbonoCapital]
   )
 
   // Solo trae algo en la fila de cierre de Contado/Crédito BIESS ("Pago
@@ -1264,7 +1320,14 @@ export function RefinanciamientoContent({ id }: { id: string }) {
           (Number(desembolsoValor) || 0) -
             (filaDesembolsoDe(refinanciamiento.detalle)?.capital ?? 0)
         ) > 0.01) ||
-      Number(meses) !== (refinanciamiento.no_cuotas ?? 0))
+      Number(meses) !== (refinanciamiento.no_cuotas ?? 0) ||
+      // Cambió la tasa de interés: el interés de cada cuota ya no corresponde.
+      Math.abs(
+        tasaAnualEfectiva -
+          (refinanciamiento.anual_interes != null && refinanciamiento.anual_interes !== ""
+            ? Number(refinanciamiento.anual_interes)
+            : TASA_INTERES_ANUAL_FIJA)
+      ) > 0.0001)
 
   // Contado/Crédito BIESS no piden el valor de las cuotas a mano — se deriva solo del
   // total a financiar menos el abono inicial (ya no tiene sentido pedirlo aparte, es
@@ -1275,11 +1338,20 @@ export function RefinanciamientoContent({ id }: { id: string }) {
   // la tabla por un cambio no relacionado, ej. una promoción).
   const valorEntradaTotalEfectivo = useMemo(() => {
     const abonoInicial = Number(abonoInicialGenerar)
-    if (esTipoContado(financType)) return redondear(totalAFinanciar - abonoInicial)
+    // El abono capital ya está en la tabla (fila propia): las cuotas reparten lo que
+    // queda después de él.
+    if (esTipoContado(financType)) {
+      return redondear(totalAFinanciar - abonoCapitalNumero - abonoInicial)
+    }
     // "Crédito BIESS": el valor de desembolso tampoco lo reparten las cuotas — sale
     // aparte, fijo — así que también se resta acá antes de repartir el remanente.
     if (esBiessLike(financType)) {
-      return redondear(totalAFinanciar - abonoInicial - (Number(desembolsoValor) || 0))
+      return redondear(
+        totalAFinanciar -
+          abonoCapitalNumero -
+          abonoInicial -
+          (Number(desembolsoValor) || 0)
+      )
     }
     // Crédito directo/Mixto: "Valor de entrada" es el TOTAL de la tabla de entrada,
     // abono inicial incluido — las cuotas reparten solo lo que queda tras restarlo
@@ -1291,6 +1363,7 @@ export function RefinanciamientoContent({ id }: { id: string }) {
     abonoInicialGenerar,
     valorEntradaTotalGenerar,
     desembolsoValor,
+    abonoCapitalNumero,
   ])
 
   // Genera de una la tabla de entrada: el abono inicial es el valor que el asesor
@@ -1922,7 +1995,9 @@ export function RefinanciamientoContent({ id }: { id: string }) {
         acc + (fila.formaPago === "Pago total" ? 0 : Number(fila.abonoLote) || 0),
       0
     )
-    const pagoTotalCalculado = redondear(totalAFinanciar - sumaSinPagoTotal).toFixed(2)
+    const pagoTotalCalculado = redondear(
+      totalAFinanciar - abonoCapitalNumero - sumaSinPagoTotal
+    ).toFixed(2)
     setEntradasTabla((anterior) => {
       let cambio = false
       const actualizado = anterior.map((fila) => {
@@ -1933,7 +2008,7 @@ export function RefinanciamientoContent({ id }: { id: string }) {
       })
       return cambio ? actualizado : anterior
     })
-  }, [financType, entradasTabla, totalAFinanciar])
+  }, [financType, entradasTabla, totalAFinanciar, abonoCapitalNumero])
 
   // "Crédito BIESS"/"Mixto": la fila "Desembolso BIESS" no es un remanente
   // calculado — es el valor y la fecha de desembolso que fija el asesor arriba, en
@@ -1989,7 +2064,6 @@ export function RefinanciamientoContent({ id }: { id: string }) {
 
     aplicarSuma("Adicionales", adicionalesNumero)
     aplicarResta("Abono realizado", abonoRealizadoNumero)
-    aplicarResta("Abono capital", abonoCapitalNumero)
 
     // Valor ya ajustado (coincide con valorLoteNumero) — sobre este se calculan los
     // porcentajes de promoción/descuento por tipo, igual que en promoDescuentoTotal.
@@ -2025,7 +2099,6 @@ export function RefinanciamientoContent({ id }: { id: string }) {
     valorLoteBruto,
     adicionalesNumero,
     abonoRealizadoNumero,
-    abonoCapitalNumero,
     discountEfectivo,
     extraDiscount,
     promocionesSeleccionadas,
@@ -2096,7 +2169,7 @@ export function RefinanciamientoContent({ id }: { id: string }) {
     descartarEdiciones = false
   ): Promise<RefinanciamientoBackend | null> {
     if (!proceso) return null
-    if (entradasTabla.length === 0) {
+    if (entradasTabla.length === 0 && !(filaAbonoCapital && !esContadoLike(financType))) {
       // Contado/Crédito BIESS necesitan abono inicial + N.º de cuotas para armar la tabla sola
       // (ver generarFilasEntrada) — si todavía no hay filas es porque falta uno de
       // esos datos (o, en BIESS, el valor de desembolso) en el generador rápido; el
@@ -2186,7 +2259,10 @@ export function RefinanciamientoContent({ id }: { id: string }) {
     }
     setGenerando(true)
     try {
-      const entradas: EntradaPagoInput[] = entradasTabla.map((fila) => ({
+      const filasAEnviar = filaAbonoCapital
+        ? [filaAbonoCapital, ...entradasTabla]
+        : entradasTabla
+      const entradas: EntradaPagoInput[] = filasAEnviar.map((fila) => ({
         formaPago: fila.formaPago,
         fechaPago: fila.fechaPago,
         abonoLote: Number(fila.abonoLote) || 0,
@@ -2260,7 +2336,9 @@ export function RefinanciamientoContent({ id }: { id: string }) {
           (filaDesembolsoDe(refinanciamiento.detalle)?.capital ?? 0)
       ),
       refinanciamiento.no_cuotas ?? 0,
-      Number(refinanciamiento.anual_interes) || TASA_INTERES_ANUAL_FIJA,
+      refinanciamiento.anual_interes != null && refinanciamiento.anual_interes !== ""
+        ? Number(refinanciamiento.anual_interes)
+        : TASA_INTERES_ANUAL_FIJA,
       filaDesembolsoDe(refinanciamiento.detalle)?.capital ?? 0
     )
     if (cuota != null) setCuotaSugerida(cuota.toFixed(2))
@@ -3218,6 +3296,61 @@ export function RefinanciamientoContent({ id }: { id: string }) {
                         </tr>
                       </thead>
                       <tbody>
+                        {filaAbonoCapital && (
+                          <tr className="border-border bg-muted/30 border-b">
+                            <td className="px-4.5 py-1.5 text-sm font-semibold">
+                              {FORMA_PAGO_ABONO_CAPITAL}
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="date"
+                                value={fechaAbonoCapital}
+                                onChange={(e) => setFechaAbonoCapital(e.target.value)}
+                                className="border-input bg-card w-full rounded-sm border px-2 py-1 text-sm outline-none"
+                              />
+                            </td>
+                            <td
+                              className="px-4.5 py-1.5 text-right font-mono text-sm"
+                              title='Se edita en el campo "Abono capital" de arriba'
+                            >
+                              {formatearMoneda(abonoCapitalNumero)}
+                            </td>
+                            {columnasAlicuota.map((_, indiceComponente) => (
+                              <td key={indiceComponente} className="px-2 py-1.5">
+                                {indiceComponente === 0 && (
+                                  <input
+                                    type="number"
+                                    value={alicuotaAbonoCapital}
+                                    placeholder="0.00"
+                                    onChange={(e) =>
+                                      setAlicuotaAbonoCapital(e.target.value)
+                                    }
+                                    className="border-input bg-card w-full rounded-sm border px-2 py-1 text-right font-mono text-sm outline-none"
+                                  />
+                                )}
+                              </td>
+                            ))}
+                            {esContadoLike(financType) && (
+                              <td className="px-4.5 py-1.5 text-right font-mono text-sm">
+                                {formatearMoneda(0)}
+                              </td>
+                            )}
+                            <td className="px-4.5 py-1.5 text-right font-mono text-sm font-bold">
+                              {formatearMoneda(totalFila(filaAbonoCapital))}
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                value={observacionesAbonoCapital}
+                                placeholder="Opcional"
+                                onChange={(e) =>
+                                  setObservacionesAbonoCapital(e.target.value)
+                                }
+                                className="border-input bg-card w-full rounded-sm border px-2 py-1 text-sm outline-none"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5" />
+                          </tr>
+                        )}
                         {entradasTabla.map((fila, indice) => (
                           <tr key={indice} className="border-border border-b">
                             <td className="px-2 py-1.5">

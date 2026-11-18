@@ -263,14 +263,19 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
     (Number(refinanciamiento?.extra_discount) || 0) +
     (Number(refinanciamiento?.promo_discount) || 0)
   // "TOTAL A FINANCIAR" del encabezado = valor del lote + adicionales − todos los
-  // descuentos − abono realizado − abono capital.
+  // descuentos − abono realizado. El abono capital ahora va como fila "Abono capital"
+  // de la tabla de entrada (no resta del valor del lote); solo los refinanciamientos
+  // viejos, guardados sin esa fila, lo siguen restando acá.
+  const abonoCapitalComoFila = (refinanciamiento?.entradas ?? []).some(
+    (fila) => fila.forma_pago === "Abono capital"
+  )
   const totalAFinanciar = Math.max(
     0,
     valorLoteNumero +
       (Number(refinanciamiento?.adicionales) || 0) -
       descuentosTotales -
       (Number(refinanciamiento?.abono_realizado) || 0) -
-      (Number(refinanciamiento?.abono_capital) || 0)
+      (abonoCapitalComoFila ? 0 : Number(refinanciamiento?.abono_capital) || 0)
   )
   // Qué se imprime según refinanciamiento.status (lib/refinanciamiento-estado.ts):
   // borrador → con la marca de agua BORRADOR (lo puede imprimir quien lo está

@@ -372,13 +372,18 @@ export function construirHojasFinanciamiento({
   })
 
   // En Refinanciamiento el valor del lote se ajustó antes de armar la tabla
-  // (+ adicionales − abono realizado − abono a capital, ver valorLoteAjustado en el
-  // backend), así que el pago total del lote deshace ese ajuste: resta adicionales y
-  // suma lo que el cliente ya había abonado.
+  // (+ adicionales − abono realizado, ver valorLoteAjustado en el backend), así que
+  // el pago total del lote deshace ese ajuste: resta adicionales y suma lo que el
+  // cliente ya había abonado. El abono capital ahora va como fila "Abono capital" de
+  // la tabla de entrada (ya sumada arriba en `entradas`); solo los refinanciamientos
+  // viejos, guardados sin esa fila, lo restaban del valor del lote y hay que sumarlo.
+  const abonoCapitalComoFila = entradas.some(
+    (f) => (f.forma_pago ?? f.concepto) === "Abono capital"
+  )
   const ajusteRefinanciamiento =
     esRefinanciamiento && "abono_realizado" in financiamiento
       ? numero(financiamiento.abono_realizado) +
-        numero(financiamiento.abono_capital) -
+        (abonoCapitalComoFila ? 0 : numero(financiamiento.abono_capital)) -
         numero(financiamiento.adicionales)
       : 0
   const totalLote = dinero(
