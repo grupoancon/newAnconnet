@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ArrowLeft, Printer } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import { useRouter } from "@/lib/navigation"
 
 import { useCan } from "@/components/shared/can"
@@ -21,6 +21,7 @@ import {
 import { EmptyState } from "@/components/shared/empty-state"
 import { Spinner } from "@/components/shared/spinner"
 import { Button } from "@/components/ui/button"
+import { BotonImprimir } from "@/components/shared/boton-imprimir"
 import { obtenerLote, type LoteInventario } from "@/lib/api/inventario-api"
 import {
   VentasApiError,
@@ -199,7 +200,10 @@ export function LicitudReporteContent({ id }: { id: string }) {
   }, [idNumero])
 
   const titular = proceso?.titular ?? null
-  const otraPersona = oferta?.cli_trabActividad === "OTRO"
+  // Otra persona efectúa la transacción: check del paso Trabajo (o, en ofertas viejas,
+  // la actividad "OTRO").
+  const otraPersona =
+    oferta?.cli_trabActividad === "OTRO" || Boolean(oferta?.cli_transNombre)
 
   // Sección 4 — beneficiarios finales: siempre arranca con el titular (sección 1), le
   // siguen los clientes adicionales agregados en el paso "Cliente" de la oferta. La
@@ -255,15 +259,15 @@ export function LicitudReporteContent({ id }: { id: string }) {
       ) : (
         <>
           <div className="bg-brand-gradient-banner no-print flex items-center justify-between gap-2 px-4 py-3.5 sm:px-6.5">
-            <Button
+            <BotonImprimir
               className="bg-status-disponible text-white shadow-none hover:brightness-95"
               size="sm"
               disabled={!oferta}
-              onClick={() => window.print()}
+              selector=".licitud-sheet"
+              nombreArchivo={`Licitud de fondos ${id}`}
             >
-              <Printer className="size-3.5" strokeWidth={1.8} />
               Imprimir licitud
-            </Button>
+            </BotonImprimir>
             <Button
               variant="ghost"
               size="sm"

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle, Copy, KeyRound } from "lucide-react"
 
 import { PillTabs } from "@/components/shared/pill-tabs"
 import { SelectField } from "@/components/shared/select-field"
@@ -16,6 +16,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { actualizarUsuarioApp } from "@/lib/api/app-usuarios-api"
 
 import {
   ESTADO_LABELS,
@@ -23,15 +24,20 @@ import {
   ROLES_APP,
   type UsuarioApp,
 } from "./datos"
+import { mensajeDeError } from "./formato"
+
+const CORREO_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type ModoPassword = "ninguno" | "auto" | "manual"
 
 export function EditarUsuarioAppSheet({
   usuario,
   onOpenChange,
+  onGuardado,
 }: {
   usuario: UsuarioApp | null
   onOpenChange: (open: boolean) => void
+  onGuardado: () => Promise<void> | void
 }) {
   const toast = useToast()
   const [nombre, setNombre] = useState("")
@@ -42,6 +48,9 @@ export function EditarUsuarioAppSheet({
   const [estado, setEstado] = useState("activo")
   const [modoPassword, setModoPassword] = useState<ModoPassword>("ninguno")
   const [passwordManual, setPasswordManual] = useState("")
+  const [guardando, setGuardando] = useState(false)
+  // Contraseña generada por el servidor: se muestra una sola vez, antes de cerrar.
+  const [generada, setGenerada] = useState<string | null>(null)
 
   useEffect(() => {
     if (!usuario) return
@@ -53,19 +62,87 @@ export function EditarUsuarioAppSheet({
     setEstado(usuario.estado)
     setModoPassword("ninguno")
     setPasswordManual("")
+    setGenerada(null)
   }, [usuario])
 
+  const correoInvalido = email.trim().length > 0 && !CORREO_VALIDO.test(email.trim())
   const puedeGuardar =
+    !guardando &&
     nombre.trim().length > 0 &&
     cedula.trim().length > 0 &&
+    !correoInvalido &&
     (modoPassword !== "manual" || passwordManual.trim().length > 0)
 
-  function guardar() {
-    toast({
-      variant: "info",
-      title: "Aún no disponible",
-      description: "La edición de usuarios de la app se conectará próximamente.",
-    })
+  async function guardar() {
+    if (!usuario) return
+    setGuardando(true)
+    try {
+      const r = await actualizarUsuarioApp(usuario.id, {
+        nombre: nombre.trim(),
+        cedula: cedula.trim(),
+        email: email.trim(),
+        telefono: telefono.trim(),
+        rol,
+        estado,
+        generateTempPassword: modoPassword === "auto",
+        tempPassword: modoPassword === "manual" ? passwordManual.trim() : undefined,
+      })
+      toast({ variant: "success", description: "Usuario actualizado." })
+      await onGuardado()
+      if (r.tempPassword) {
+        setGenerada(r.tempPassword)
+      } else {
+        onOpenChange(false)
+      }
+    } catch (err) {
+      toast({ variant: "error", description: mensajeDeError(err) })
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  async function copiar() {
+    if (!generada) return
+    try {
+      await navigator.clipboard.writeText(generada)
+      toast({ variant: "success", description: "Contraseña copiada." })
+    } catch {
+      toast({ variant: "error", description: "No se pudo copiar. Cópiala a mano." })
+    }
+  }
+
+  if (generada) {
+    return (
+      <Sheet open={usuario !== null} onOpenChange={onOpenChange}>
+        <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-md">
+          <SheetHeader className="border-border border-b p-5">
+            <SheetTitle>Contraseña temporal generada</SheetTitle>
+            <SheetDescription>{usuario?.nombre}</SheetDescription>
+          </SheetHeader>
+          <div className="space-y-4 p-5">
+            <div className="bg-muted/60 border-border flex items-center gap-3 rounded-md border p-4">
+              <KeyRound className="text-accent-foreground size-5 shrink-0" strokeWidth={1.8} />
+              <span className="flex-1 font-mono text-lg font-semibold tracking-wider">
+                {generada}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => void copiar()}>
+                <Copy className="size-3.5" strokeWidth={1.8} />
+                Copiar
+              </Button>
+            </div>
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              Entrégasela al cliente: entra con su cédula y esta contraseña, y la app le
+              pedirá crear una nueva. No se volverá a mostrar.
+            </p>
+          </div>
+          <SheetFooter className="border-border flex-row justify-end border-t p-4">
+            <Button size="sm" onClick={() => onOpenChange(false)}>
+              Listo
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+    )
   }
 
   return (
@@ -80,7 +157,12 @@ export function EditarUsuarioAppSheet({
           <TextField label="Nombre" value={nombre} onChange={setNombre} />
           <TextField label="Cédula" value={cedula} onChange={setCedula} />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <TextField label="Correo" type="email" value={email} onChange={setEmail} />
+            <div>
+              <TextField label="Correo" type="email" value={email} onChange={setEmail} />
+              {correoInvalido ? (
+                <p className="text-destructive mt-1 text-xs">El correo no es válido.</p>
+              ) : null}
+            </div>
             <TextField label="Teléfono" value={telefono} onChange={setTelefono} />
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -140,8 +222,8 @@ export function EditarUsuarioAppSheet({
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button size="sm" disabled={!puedeGuardar} onClick={guardar}>
-            Guardar cambios
+          <Button size="sm" disabled={!puedeGuardar} onClick={() => void guardar()}>
+            {guardando ? "Guardando…" : "Guardar cambios"}
           </Button>
         </SheetFooter>
       </SheetContent>

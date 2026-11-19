@@ -3,7 +3,7 @@
 import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/lib/navigation"
-import { Plus, Printer, Trash2, ArrowLeft } from "lucide-react"
+import { Plus, Trash2, ArrowLeft } from "lucide-react"
 
 import { EmptyState } from "@/components/shared/empty-state"
 import { LUGARES_VENTA_OPCIONES } from "@/components/shared/select-options"
@@ -11,6 +11,7 @@ import { SelectField } from "@/components/shared/select-field"
 import { Spinner } from "@/components/shared/spinner"
 import { useToast } from "@/components/shared/toast-provider"
 import { Button } from "@/components/ui/button"
+import { BotonImprimir } from "@/components/shared/boton-imprimir"
 import { Input } from "@/components/ui/input"
 import {
   InventarioApiError,
@@ -376,10 +377,13 @@ export function OfertaImprimirContent({ id }: { id: string }) {
           Volver
         </Button>
         {oferta && (
-          <Button onClick={() => window.print()}>
-            <Printer className="size-3.5" strokeWidth={1.8} />
-            Imprimir
-          </Button>
+          <div className="flex items-center gap-2">
+            <BotonImprimir
+              selector=".reporte-imprimible"
+              margen={conMembrete ? 0 : undefined}
+              nombreArchivo={`Oferta de compra ${id}`}
+            />
+          </div>
         )}
       </div>
 
@@ -829,7 +833,7 @@ export function OfertaImprimirContent({ id }: { id: string }) {
                 DEL INMUEBLE A SU NOMBRE
               </div>
 
-              <div className="mt-16 flex flex-wrap justify-between gap-6">
+              <div className="mt-24 flex flex-wrap justify-between gap-6">
                 <Firma
                   nombre={apoderado ?? titular?.nombre ?? "—"}
                   rol={apoderado ? "APODERADO · C.C N°" : "C.C N°"}
@@ -879,6 +883,25 @@ export function OfertaImprimirContent({ id }: { id: string }) {
         .hoja-contenido {
           position: relative;
           z-index: 1;
+        }
+        /* PDF armado en el navegador (el Imprimir del teléfono, ver
+           lib/imprimir-reporte.ts): no usa @media print, así que el membrete se pinta
+           con .modo-pdf. Cada hoja con membrete es un A4 exacto (210×297) con la misma
+           área segura que la impresión, en % del ancho (3cm / 1.6cm / 3.6cm de 21cm). */
+        .modo-pdf .hoja-con-membrete {
+          box-sizing: border-box;
+          aspect-ratio: 210 / 297;
+          padding: 14.29% 7.62% 17.14%;
+        }
+        .modo-pdf .hoja-membrete {
+          display: block;
+          position: absolute;
+          inset: 0;
+          background-image: url("/images/membrete-oferta.png");
+          background-position: top center;
+          background-repeat: no-repeat;
+          background-size: 100% 100%;
+          z-index: 0;
         }
         @media print {
           .no-print {
@@ -942,7 +965,11 @@ function Hoja({
   children: React.ReactNode
 }) {
   return (
-    <div className={`hoja${ultima ? " hoja-ultima" : ""}`}>
+    <div
+      className={["hoja", conMembrete && "hoja-con-membrete", ultima && "hoja-ultima"]
+        .filter(Boolean)
+        .join(" ")}
+    >
       {conMembrete && <div className="hoja-membrete" aria-hidden />}
       <div className="hoja-contenido">{children}</div>
     </div>

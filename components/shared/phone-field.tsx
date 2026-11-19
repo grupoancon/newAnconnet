@@ -4,6 +4,7 @@ import { ComboboxField, type ComboboxOption } from "@/components/shared/combobox
 import { TextField } from "@/components/shared/text-field"
 import { CODIGOS_TELEFONICOS } from "@/lib/const/codigos-telefonicos"
 import { validarTelefono } from "@/lib/validations/telefono"
+import { EtiquetaCampo } from "@/components/shared/etiqueta-campo"
 
 const OPCIONES_PREFIJO: ComboboxOption[] = CODIGOS_TELEFONICOS.map((c) => ({
   value: c.codigo,
@@ -33,7 +34,7 @@ export function PhoneField({
   return (
     <div>
       <label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
-        {requerido ? `${label} *` : label}
+        <EtiquetaCampo>{requerido ? `${label} *` : label}</EtiquetaCampo>
       </label>
       <div className="flex gap-2">
         <ComboboxField

@@ -21,3 +21,7 @@ export function iniciales(nombre: string): string {
     .map((parte) => parte.charAt(0).toUpperCase())
     .join("")
 }
+
+export function mensajeDeError(err: unknown): string {
+  return err instanceof Error ? err.message : "Ocurrió un error inesperado."
+}

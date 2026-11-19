@@ -169,6 +169,8 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Gestión de usuarios", href: "/app/usuarios" },
       { label: "Notificaciones", href: "/app/notificaciones" },
       { label: "Novedades", href: "/app/novedades" },
+      { label: "Videos de ayuda", href: "/app/ayudas" },
+      { label: "Sesiones", href: "/app/sesiones" },
       { label: "Diagnóstico", href: "/app/diagnostico" },
     ],
   },

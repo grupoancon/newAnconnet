@@ -348,7 +348,7 @@ export function EntregaContent({ id }: { id: number }) {
 
                 <div>
                   <label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
-                    ¿Quién realizó la entrega? *
+                    ¿Quién realizó la entrega? <span className="text-destructive">*</span>
                   </label>
                   <fieldset
                     disabled={!puedeRegistrar}
@@ -399,7 +399,7 @@ export function EntregaContent({ id }: { id: number }) {
 
                 <div>
                   <label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
-                    Foto de la entrega *
+                    Foto de la entrega <span className="text-destructive">*</span>
                   </label>
                   <input
                     ref={inputFoto}

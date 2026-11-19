@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select"
 import type { GrupoOpciones, OpcionSelect } from "@/components/shared/select-options"
 import { cn } from "@/lib/utils"
+import { EtiquetaCampo } from "@/components/shared/etiqueta-campo"
 
 // Select real (Radix): abre/cierra con las animaciones de components/ui/select.tsx
 // (data-open:animate-in/zoom-in-95, data-closed:animate-out/zoom-out-95).
@@ -53,7 +54,7 @@ export function SelectField({
     <div>
       {label ? (
         <label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
-          {label}
+          <EtiquetaCampo>{label}</EtiquetaCampo>
         </label>
       ) : null}
       <Select value={value} defaultValue={defaultValue} onValueChange={onValueChange}>
@@ -104,7 +105,7 @@ export function StaticField({
   return (
     <div>
       <label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
-        {label}
+        <EtiquetaCampo>{label}</EtiquetaCampo>
       </label>
       <div
         className={cn(

@@ -78,6 +78,7 @@ type ProcesoFila = {
 const ESTADO_PROCESO: Record<string, StatusVariant> = {
   pendiente: "pendiente",
   ingresado: "ingresado",
+  incompleto: "incompleto",
   aprobado: "aprobado",
   rechazado: "rechazado",
 }

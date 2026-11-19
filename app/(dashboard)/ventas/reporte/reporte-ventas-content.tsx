@@ -1,14 +1,14 @@
 "use client"
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
-import { Printer, Search } from "lucide-react"
+import { Search } from "lucide-react"
 
 import { DashboardTopbar } from "@/components/shared/dashboard-topbar"
 import { EmptyState } from "@/components/shared/empty-state"
 import { KpiCard } from "@/components/shared/kpi-card"
 import { Spinner } from "@/components/shared/spinner"
-import { StatusBadge, type StatusVariant } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
+import { BotonImprimir } from "@/components/shared/boton-imprimir"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -21,21 +21,8 @@ import { listarProyectos, type ProyectoInventario } from "@/lib/api/inventario-a
 import {
   VentasApiError,
   obtenerReporteVentas,
-  type EstadoGeneralVenta,
   type MiVenta,
 } from "@/lib/api/ventas-api"
-
-const ESTADO_LABEL: Record<EstadoGeneralVenta, string> = {
-  aprobado: "Completadas",
-  rechazado: "Rechazadas",
-  "en-tramite": "En trámite",
-}
-
-const ESTADO_VARIANT: Record<EstadoGeneralVenta, StatusVariant> = {
-  aprobado: "aprobado",
-  rechazado: "rechazado",
-  "en-tramite": "en-tramite",
-}
 
 function formatearMoneda(valor: number | null | undefined): string {
   if (valor == null || isNaN(valor)) return "—"
@@ -49,11 +36,6 @@ function formatearMoneda(valor: number | null | undefined): string {
 
 function formatearFecha(fecha: string | null): string {
   return fecha ? fecha.slice(0, 10) : "—"
-}
-
-function formatearDocumentosPendientes(pendientes: number): string {
-  if (pendientes <= 0) return "Completo"
-  return pendientes === 1 ? "Falta 1" : `Faltan ${pendientes}`
 }
 
 // "location" es "oficina" | "Puerto Quito" (ver LUGARES_VENTA_OPCIONES en
@@ -117,6 +99,14 @@ export function ReporteVentasContent({ embebido = false }: { embebido?: boolean 
     cargar()
   }, [cargar])
 
+  const hayFiltros = Boolean(asesor || proyectoId || desde || hasta)
+  function limpiarFiltros() {
+    setAsesor("")
+    setProyectoId("")
+    setDesde("")
+    setHasta("")
+  }
+
   // KPI "Ventas completadas + documentos": a diferencia de la tabla (que en la vista
   // "Completadas" muestra toda venta aprobada, tenga o no documentos pendientes), este
   // número solo cuenta las que además tienen los documentos 100% completos.
@@ -174,15 +164,14 @@ export function ReporteVentasContent({ embebido = false }: { embebido?: boolean 
               Reporte general de ventas
             </h1>
           </div>
-          <Button
+          <BotonImprimir
             type="button"
             size="sm"
             className="no-print"
-            onClick={() => window.print()}
-          >
-            <Printer className="size-3.5" strokeWidth={1.8} />
-            Imprimir
-          </Button>
+            selector=".reporte-scroll"
+            nombreArchivo="Reporte de ventas"
+            horizontal
+          />
         </div>
 
         <div className="mb-4.5 grid grid-cols-2 gap-3.5 print:mb-[5px]! print:gap-1.5!">
@@ -258,6 +247,16 @@ export function ReporteVentasContent({ embebido = false }: { embebido?: boolean 
               Falta documentos
             </Button>
           </div>
+
+          {hayFiltros && (
+            <button
+              type="button"
+              onClick={limpiarFiltros}
+              className="text-primary text-xs font-semibold hover:underline"
+            >
+              Limpiar filtros
+            </button>
+          )}
         </div>
 
         {cargando ? (
@@ -275,20 +274,20 @@ export function ReporteVentasContent({ embebido = false }: { embebido?: boolean 
           <div className="border-border bg-card overflow-x-auto rounded-lg border print:rounded-none! print:border-0!">
             <table className="w-full text-sm print:text-[12px]!">
               <thead>
-                <tr className="border-border text-muted-foreground border-b text-left text-[11px] font-semibold uppercase print:text-[12px]!">
-                  <th className="px-4 py-3 print:px-1.5! print:py-1!">Proyecto</th>
-                  <th className="px-4 py-3 print:px-1.5! print:py-1!">Fecha</th>
-                  <th className="px-4 py-3 print:px-1.5! print:py-1!">Lote</th>
-                  <th className="px-4 py-3 print:px-1.5! print:py-1!">Asesor</th>
-                  <th className="px-4 py-3 print:px-1.5! print:py-1!">Precio</th>
-                  <th className="px-4 py-3 print:px-1.5! print:py-1!">Venta</th>
-                  <th className="px-4 py-3 print:px-1.5! print:py-1!">Tipo de venta</th>
-                  <th className="px-4 py-3 print:px-1.5! print:py-1!">
+                <tr className="border-border text-muted-foreground border-b text-left text-[11px] font-semibold whitespace-nowrap uppercase print:text-[12px]!">
+                  <th className="min-w-64 px-3 py-2.5 print:min-w-0! print:w-[22%]! print:px-1.5! print:py-1!">
+                    Cliente
+                  </th>
+                  <th className="px-3 py-2.5 print:px-1.5! print:py-1!">Fecha</th>
+                  <th className="px-3 py-2.5 print:px-1.5! print:py-1!">Lote</th>
+                  <th className="px-3 py-2.5 print:px-1.5! print:py-1!">Asesor</th>
+                  <th className="px-3 py-2.5 print:px-1.5! print:py-1!">Precio</th>
+                  <th className="px-3 py-2.5 print:px-1.5! print:py-1!">Venta</th>
+                  <th className="px-3 py-2.5 print:px-1.5! print:py-1!">Tipo de venta</th>
+                  <th className="px-3 py-2.5 print:px-1.5! print:py-1!">
                     Cómo nos contactó
                   </th>
-                  <th className="px-4 py-3 print:px-1.5! print:py-1!">Prospectador</th>
-                  <th className="px-4 py-3 print:px-1.5! print:py-1!">Estado</th>
-                  <th className="px-4 py-3 print:px-1.5! print:py-1!">Documentos</th>
+                  <th className="px-3 py-2.5 print:px-1.5! print:py-1!">Prospectador</th>
                 </tr>
               </thead>
               <tbody>
@@ -299,60 +298,40 @@ export function ReporteVentasContent({ embebido = false }: { embebido?: boolean 
                         key={proceso.id}
                         className="border-border border-b last:border-0"
                       >
-                        <td className="px-4 py-3 print:px-1.5! print:py-1!">
-                          {proceso.proyectoNombre || "—"}
+                        <td className="px-3 py-2.5 print:px-1.5! print:py-1!">
+                          {proceso.cliName || "—"}
                         </td>
-                        <td className="px-4 py-3 print:px-1.5! print:py-1!">
+                        <td className="px-3 py-2.5 whitespace-nowrap print:px-1.5! print:py-1!">
                           {formatearFecha(proceso.ventaNuevaAt)}
                         </td>
-                        <td className="px-4 py-3 font-mono print:px-1.5! print:py-1!">
+                        <td className="px-3 py-2.5 font-mono whitespace-nowrap print:px-1.5! print:py-1!">
                           {proceso.cliLote || "—"}
                         </td>
-                        <td className="px-4 py-3 print:px-1.5! print:py-1!">
+                        <td className="px-3 py-2.5 print:px-1.5! print:py-1!">
                           {proceso.cliAsesor || "—"}
                         </td>
-                        <td className="px-4 py-3 font-mono print:px-1.5! print:py-1!">
+                        <td className="px-3 py-2.5 font-mono whitespace-nowrap print:px-1.5! print:py-1!">
                           {formatearMoneda(proceso.lotePrice)}
                         </td>
-                        <td className="px-4 py-3 print:px-1.5! print:py-1!">
+                        <td className="px-3 py-2.5 whitespace-nowrap print:px-1.5! print:py-1!">
                           {formatearLugarVenta(proceso.location)}
                         </td>
-                        <td className="px-4 py-3 print:px-1.5! print:py-1!">
+                        <td className="px-3 py-2.5 whitespace-nowrap print:px-1.5! print:py-1!">
                           {proceso.tipoVenta || "—"}
                         </td>
-                        <td className="px-4 py-3 print:px-1.5! print:py-1!">
+                        <td className="px-3 py-2.5 print:px-1.5! print:py-1!">
                           {proceso.comoNosContacto || "—"}
                         </td>
-                        <td className="px-4 py-3 print:px-1.5! print:py-1!">
+                        <td className="px-3 py-2.5 print:px-1.5! print:py-1!">
                           {proceso.prospectador || "—"}
                           {proceso.apoyoProyecto ? " / Karina Coveña" : ""}
-                        </td>
-                        <td className="px-4 py-3 print:px-1.5! print:py-1!">
-                          <StatusBadge
-                            variant={ESTADO_VARIANT[proceso.estadoGeneral]}
-                            className="print:px-1! print:py-0! print:text-[12px]!"
-                          >
-                            {ESTADO_LABEL[proceso.estadoGeneral]}
-                          </StatusBadge>
-                        </td>
-                        <td className="px-4 py-3 print:px-1.5! print:py-1!">
-                          <StatusBadge
-                            variant={
-                              proceso.documentosPendientes === 0
-                                ? "aprobado"
-                                : "rechazado"
-                            }
-                            className="print:px-1! print:py-0! print:text-[12px]!"
-                          >
-                            {formatearDocumentosPendientes(proceso.documentosPendientes)}
-                          </StatusBadge>
                         </td>
                       </tr>
                     ))}
                     <tr className="bg-muted border-border border-b">
                       <td
-                        colSpan={11}
-                        className="text-muted-foreground px-4 py-2 text-left text-[11px] font-bold print:px-1.5! print:py-1! print:text-[12px]!"
+                        colSpan={9}
+                        className="text-muted-foreground px-3 py-2 text-left text-[11px] font-bold print:px-1.5! print:py-1! print:text-[12px]!"
                       >
                         Total {proyecto}: {filas.length}{" "}
                         {filas.length === 1 ? "lote" : "lotes"}

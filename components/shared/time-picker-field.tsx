@@ -6,6 +6,7 @@ import { Clock } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { EtiquetaCampo } from "@/components/shared/etiqueta-campo"
 
 const HORAS = Array.from({ length: 24 }, (_, indice) => String(indice).padStart(2, "0"))
 // Pasos de 5 minutos — más rápido de recorrer que los 60 valores completos, sin
@@ -40,7 +41,7 @@ function Columna({
   return (
     <div
       ref={ref}
-      className="border-border h-44 w-16 overflow-y-auto rounded-md border scroll-smooth"
+      className="border-border h-44 w-16 overflow-y-auto scroll-smooth rounded-md border"
     >
       {valores.map((valor) => (
         <button
@@ -98,7 +99,7 @@ export function TimePickerField({
     <div>
       {label ? (
         <label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
-          {label}
+          <EtiquetaCampo>{label}</EtiquetaCampo>
         </label>
       ) : null}
       <Popover open={abierto} onOpenChange={setAbierto}>
@@ -120,7 +121,11 @@ export function TimePickerField({
             </div>
             <div className="flex gap-2">
               <Columna valores={HORAS} seleccionado={hora} onSeleccionar={setHora} />
-              <Columna valores={MINUTOS} seleccionado={minuto} onSeleccionar={setMinuto} />
+              <Columna
+                valores={MINUTOS}
+                seleccionado={minuto}
+                onSeleccionar={setMinuto}
+              />
             </div>
             <Button
               type="button"

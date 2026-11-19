@@ -1,5 +1,6 @@
 "use client"
 
+import { esTipoContado } from "@/lib/tipos-financiamiento"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/lib/navigation"
 import {
@@ -480,22 +481,6 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
                       mono
                     />
                   )}
-                  {descuentoTipoInfo.anulado && (
-                    <StaticField
-                      label={`Descuento ${descuentoTipoInfo.porcentaje * 100}% (${refinanciamiento.financ_type})`}
-                      value={
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="text-muted-foreground line-through">
-                            {formatearMoneda(descuentoTipoInfo.montoSinPromocion)}
-                          </span>
-                          <span className="text-destructive truncate font-sans text-xs">
-                            No aplica con la promoción
-                          </span>
-                        </span>
-                      }
-                      mono
-                    />
-                  )}
                 </div>
                 {refinanciamiento.ofrecimientos && (
                   <div className="mb-7.5">
@@ -538,7 +523,7 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
                             }
                           >
                             <td className="px-4.5 py-1.75 font-sans">
-                              {(refinanciamiento.financ_type === "Contado" ||
+                              {(esTipoContado(refinanciamiento.financ_type ?? "") ||
                                 esBiessLike(refinanciamiento.financ_type)) &&
                               fila.forma_pago === "Entrada"
                                 ? "Cuota"
@@ -615,7 +600,7 @@ export function RefinanciamientoReporteContent({ id }: { id: string }) {
                   </div>
                 </div>
 
-                {refinanciamiento.financ_type !== "Contado" &&
+                {!esTipoContado(refinanciamiento.financ_type ?? "") &&
                   !esBiessLike(refinanciamiento.financ_type) && (
                     <>
                       <SeccionTitulo texto="Cronograma de amortización" />

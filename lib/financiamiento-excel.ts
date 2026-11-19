@@ -10,6 +10,7 @@
 // SheetJS solo por esto; se importa dentro de la función para que no entre al bundle
 // inicial.
 
+import { esTipoContado } from "@/lib/tipos-financiamiento"
 import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import type { LoteInventario } from "@/lib/api/inventario-api"
 import type {
@@ -19,6 +20,7 @@ import type {
   ProcesoBackend,
   RefinanciamientoBackend,
 } from "@/lib/api/ventas-api"
+import { valorLoteFinanciamiento } from "@/lib/valor-lote-financiamiento"
 
 type Celda = string | number | null
 
@@ -110,7 +112,7 @@ function esBiessLike(tipo: string | null | undefined): boolean {
 }
 
 function esContadoLike(tipo: string | null | undefined): boolean {
-  return tipo === "Contado" || esBiessLike(tipo)
+  return esTipoContado(tipo ?? "") || esBiessLike(tipo)
 }
 
 // Etiqueta de la columna "FORMA DE PAGO" — la misma que se ve en pantalla, en
@@ -180,7 +182,16 @@ export function construirHojasFinanciamiento({
   const esPerla =
     normalizar(nombreProyecto).includes("PERLA") || lote.toUpperCase().startsWith("PV-")
 
-  const valorLote = dinero(loteInfo?.pvp ?? proceso?.lote_price)
+  const valorLote = dinero(
+    valorLoteFinanciamiento({
+      // El refinanciamiento guarda total_financ con otra fórmula: ahí se sigue
+      // usando el precio del inventario como antes.
+      financiamiento: esRefinanciamiento ? null : financiamiento,
+      finanStatus: proceso?.finan_status,
+      pvpInventario: loteInfo?.pvp,
+      lotePriceProceso: proceso?.lote_price,
+    })
+  )
   const metros = dinero(loteInfo?.areaUtil ?? proceso?.lote_mts)
   // Misma regla que el reporte en pantalla: si el registro quedó sin "discount", el
   // descuento fijo de Contado (5%) / Crédito BIESS (3%) se recalcula.
@@ -361,13 +372,18 @@ export function construirHojasFinanciamiento({
   })
 
   // En Refinanciamiento el valor del lote se ajustó antes de armar la tabla
-  // (+ adicionales − abono realizado − abono a capital, ver valorLoteAjustado en el
-  // backend), así que el pago total del lote deshace ese ajuste: resta adicionales y
-  // suma lo que el cliente ya había abonado.
+  // (+ adicionales − abono realizado, ver valorLoteAjustado en el backend), así que
+  // el pago total del lote deshace ese ajuste: resta adicionales y suma lo que el
+  // cliente ya había abonado. El abono capital ahora va como fila "Abono capital" de
+  // la tabla de entrada (ya sumada arriba en `entradas`); solo los refinanciamientos
+  // viejos, guardados sin esa fila, lo restaban del valor del lote y hay que sumarlo.
+  const abonoCapitalComoFila = entradas.some(
+    (f) => (f.forma_pago ?? f.concepto) === "Abono capital"
+  )
   const ajusteRefinanciamiento =
     esRefinanciamiento && "abono_realizado" in financiamiento
       ? numero(financiamiento.abono_realizado) +
-        numero(financiamiento.abono_capital) -
+        (abonoCapitalComoFila ? 0 : numero(financiamiento.abono_capital)) -
         numero(financiamiento.adicionales)
       : 0
   const totalLote = dinero(

@@ -46,3 +46,8 @@ graphify-out/
 
 
 certificates
+# firma electrónica: certificados y claves NUNCA al repositorio
+*.p12
+*.pfx
+*.key
+/certificados-firma/

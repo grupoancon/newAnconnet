@@ -6,7 +6,7 @@ export const LUGARES_VENTA = ["Oficina", "Puerto Quito"]
 // cli_asesor es VarChar(200) en la BD, el nombre completo entra sin problema.
 export const ASESORES = [
   "ANDRADE CONTRERAS MIRIAM GERALDINE",
-  "ALCAZAR SANTOS JHOANNA ELIZABETH",
+  "ALCÀZAR SANTOS JHOANNA ELIZABETH",
   "BORJA MENDOZA MARCELO GEOVANNI",
   "CRUZ PEREZ THAIS STEPHANY",
   "CUVI VAZQUES MARIBEL GUADALUPE",
@@ -46,6 +46,7 @@ export const PARENTESCOS = [
   "CUÑADO/CUÑADA",
   "ABUELO/ABUELA",
   "AMIGO/AMIGA",
+  "ESPOSO/ESPOSA"
 ]
 
 // Relación con el cliente (clientes adicionales, referido, PEP, dueño de los fondos):
@@ -96,13 +97,14 @@ export const MEDIOS_CONTACTO_GRUPOS: GrupoOpciones[] = [
   },
 ]
 
-export const PROSPECTADORES = ["Cristian Mosquera", "Tatiana Cevallos", "Aaron Andrade"]
+export const PROSPECTADORES = ["Cristhian Mosquera", "Tatiana Cevallos", "Aáron Andrade"]
 
 // Tipo de operación del inmueble (paso "Inmueble" de la oferta) — se refleja en el
 // reporte de licitud de fondos (Sección 0 del formulario UAFE).
 export const TIPOS_OPERACION = [
   "Compraventa",
   "Promesa de compraventa",
+  "Convenio de compra",
   "Arrendamiento",
   "Cesión de derechos",
   "Anticresis",
@@ -128,6 +130,7 @@ export const FUENTES_INGRESOS = [
   "Alquileres",
   "Honorarios profesionales",
   "Remesas",
+  "Jubilado",
   "Otro",
 ]
 
@@ -177,7 +180,7 @@ export const LUGARES_VENTA_OPCIONES: OpcionSelect[] = [
   { value: "Puerto Quito", label: "Puerto Quito" },
 ]
 
-export const SUCURSALES = ["Oficina Quito", "Oficina Puerto Quito", "Oficina Otavalo"]
+export const SUCURSALES = ["Oficina Quito", "Oficina Puerto Quito"]
 
 export const TIPOS_FINANCIAMIENTO = [
   "Crédito directo",
@@ -238,6 +241,7 @@ export const TIPOS_PERMISO = [
 export const TIPOS_PRESTAMO = ["PRESTAMO", "ANTICIPO"]
 
 export const PLAZOS_PRESTAMO = [
+  "1 mes",
   "3 Meses",
   "6 Meses",
   "9 Meses",

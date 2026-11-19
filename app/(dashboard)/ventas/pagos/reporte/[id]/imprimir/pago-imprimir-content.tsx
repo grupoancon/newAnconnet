@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react"
 import Image from "next/image"
 import { useRouter } from "@/lib/navigation"
-import { ArrowLeft, Printer } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { BotonImprimir } from "@/components/shared/boton-imprimir"
 import { EmptyState } from "@/components/shared/empty-state"
 import { Spinner } from "@/components/shared/spinner"
 import {
@@ -156,10 +157,7 @@ export function PagoImprimirContent({ id }: { id: string }) {
           Volver
         </Button>
         {pago && (
-          <Button onClick={() => window.print()}>
-            <Printer className="size-3.5" strokeWidth={1.8} />
-            Imprimir
-          </Button>
+          <BotonImprimir selector=".recibo-pago" nombreArchivo={`Recibo de pago ${id}`} />
         )}
       </div>
 

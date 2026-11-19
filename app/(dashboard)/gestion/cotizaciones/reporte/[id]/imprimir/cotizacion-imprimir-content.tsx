@@ -1,13 +1,15 @@
 "use client"
 
+import { esTipoContado } from "@/lib/tipos-financiamiento"
 import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import { useState, useEffect } from "react"
 import { useRouter } from "@/lib/navigation"
-import { ArrowLeft, Printer } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 
 import { EmptyState } from "@/components/shared/empty-state"
 import { Spinner } from "@/components/shared/spinner"
 import { Button } from "@/components/ui/button"
+import { BotonImprimir } from "@/components/shared/boton-imprimir"
 import type { LoteInventario } from "@/lib/api/inventario-api"
 import {
   VentasApiError,
@@ -177,10 +179,10 @@ export function CotizacionImprimirContent({ id }: { id: string }) {
           Volver
         </Button>
         {cotizacion && (
-          <Button onClick={() => window.print()}>
-            <Printer className="size-3.5" strokeWidth={1.8} />
-            Imprimir
-          </Button>
+          <BotonImprimir
+            selector=".anexo-imprimible"
+            nombreArchivo={`Cotización ${id}`}
+          />
         )}
       </div>
 
@@ -276,7 +278,7 @@ export function CotizacionImprimirContent({ id }: { id: string }) {
               {entradas.map((fila, indice) => (
                 <tr key={indice}>
                   <Td>
-                    {(cotizacion.financ_type === "Contado" ||
+                    {(esTipoContado(cotizacion.financ_type ?? "") ||
                       cotizacion.financ_type === "Crédito BIESS") &&
                     fila.forma_pago === "Entrada"
                       ? "Cuota"
@@ -313,7 +315,7 @@ export function CotizacionImprimirContent({ id }: { id: string }) {
             </tbody>
           </table>
 
-          {cotizacion.financ_type !== "Contado" &&
+          {!esTipoContado(cotizacion.financ_type ?? "") &&
             cotizacion.financ_type !== "Crédito BIESS" && (
               <>
                 <div className="mb-4 text-[11px] font-bold">
@@ -413,6 +415,13 @@ export function CotizacionImprimirContent({ id }: { id: string }) {
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
           color-adjust: exact;
+        }
+        /* En el teléfono la marca de agua tapa la tabla: solo queda el aviso rojo de
+           arriba (en el PDF del teléfono también se omite, ver lib/imprimir-reporte.ts). */
+        @media screen and (max-width: 767px) {
+          .borrador-watermark {
+            display: none;
+          }
         }
         .amortizacion-tabla thead {
           display: table-header-group;

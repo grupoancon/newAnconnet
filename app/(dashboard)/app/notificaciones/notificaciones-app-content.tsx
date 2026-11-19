@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Bell, CalendarClock, ChevronRight, RefreshCw, Send, Users } from "lucide-react"
 
 import { DashboardTopbar } from "@/components/shared/dashboard-topbar"
@@ -14,14 +14,14 @@ import { TextField } from "@/components/shared/text-field"
 import { TimePickerField } from "@/components/shared/time-picker-field"
 import { useToast } from "@/components/shared/toast-provider"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
+import { Spinner } from "@/components/shared/spinner"
+import { crearNotificacion, listarNotificaciones } from "@/lib/api/app-notificaciones-api"
 import { cn } from "@/lib/utils"
 
 import {
   DESTINOS_APP,
   ESTADO_LABELS,
-  HISTORIAL_EJEMPLO,
   TIPO_LABELS,
   type EstadoNotificacion,
   type Notificacion,
@@ -42,11 +42,38 @@ const FILTROS_ESTADO: { id: "todos" | EstadoNotificacion; label: string }[] = [
   { id: "cancelada", label: "Canceladas" },
 ]
 
+// El envío (anconAPI) usa un solo criterio por segmento: no se combinan.
+type CriterioSegmento = "cedulas" | "lotes" | "proyectos" | "mora"
+
+const CRITERIOS_SEGMENTO: { id: CriterioSegmento; label: string }[] = [
+  { id: "cedulas", label: "Cédulas" },
+  { id: "lotes", label: "Lotes" },
+  { id: "proyectos", label: "Proyecto" },
+  { id: "mora", label: "Con mora" },
+]
+
+const AYUDA_CRITERIO: Record<
+  Exclude<CriterioSegmento, "mora">,
+  { label: string; placeholder: string }
+> = {
+  cedulas: { label: "Cédulas", placeholder: "0102030405, 1712345678" },
+  lotes: { label: "Lotes", placeholder: "F-M30-101, G-104" },
+  proyectos: { label: "Prefijos de proyecto", placeholder: "F-, G-" },
+}
+
 function separarLista(valor: string): string[] {
-  return valor
-    .split(/[\s,]+/)
-    .map((x) => x.trim())
-    .filter(Boolean)
+  return Array.from(
+    new Set(
+      valor
+        .split(/[\s,]+/)
+        .map((x) => x.trim())
+        .filter(Boolean)
+    )
+  )
+}
+
+function mensajeDeError(err: unknown): string {
+  return err instanceof Error ? err.message : "Ocurrió un error inesperado."
 }
 
 export function NotificacionesAppContent() {
@@ -63,70 +90,119 @@ export function NotificacionesAppContent() {
   const [fecha, setFecha] = useState("")
   const [hora, setHora] = useState("")
 
-  // Segmento
-  const [enMora, setEnMora] = useState(false)
+  // Segmento: un solo criterio (ver CRITERIOS_SEGMENTO).
+  const [criterio, setCriterio] = useState<CriterioSegmento>("cedulas")
+  const [valoresSegmento, setValoresSegmento] = useState("")
   const [diasMora, setDiasMora] = useState("")
-  const [cedulas, setCedulas] = useState("")
-  const [lotes, setLotes] = useState("")
-  const [prefijos, setPrefijos] = useState("")
+  const [enviando, setEnviando] = useState(false)
 
   // ── Historial ──
-  // PENDIENTE: reemplazar por GET /notifications/history (ver ./datos.ts).
-  const historial = HISTORIAL_EJEMPLO
+  const [historial, setHistorial] = useState<Notificacion[]>([])
+  const [cargando, setCargando] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [filtroEstado, setFiltroEstado] = useState<"todos" | EstadoNotificacion>("todos")
   const [seleccionada, setSeleccionada] = useState<Notificacion | null>(null)
 
-  const segmento = useMemo(() => {
-    const s: Record<string, unknown> = {}
-    if (enMora) s.en_mora = true
-    if (diasMora.trim()) s.dias_mora_min = Number(diasMora)
-    if (cedulas.trim()) s.cedulas = separarLista(cedulas)
-    if (lotes.trim()) s.lotes = separarLista(lotes)
-    if (prefijos.trim()) s.prefijos_proyecto = separarLista(prefijos)
-    return s
-  }, [enMora, diasMora, cedulas, lotes, prefijos])
-
-  const resumenSegmento = [
-    enMora ? "con mora" : null,
-    diasMora.trim() ? `≥ ${diasMora} días de mora` : null,
-    cedulas.trim() ? `${separarLista(cedulas).length} cédula(s)` : null,
-    lotes.trim() ? `lotes ${separarLista(lotes).join(", ")}` : null,
-    prefijos.trim() ? `proyectos ${separarLista(prefijos).join(", ")}` : null,
-  ].filter(Boolean)
-
-  const puedeEnviar =
-    titulo.trim().length > 0 &&
-    mensaje.trim().length > 0 &&
-    (tipo !== "individual" || cedula.trim().length > 0) &&
-    (tipo !== "segmentada" || Object.keys(segmento).length > 0) &&
-    (cuando === "ahora" || (fecha.length > 0 && hora.length > 0))
-
-  const filtradas =
-    filtroEstado === "todos" ? historial : historial.filter((n) => n.estado === filtroEstado)
-
-  // Cuerpo que espera POST /notifications (mismo formato que la intranet anterior).
-  function armarCuerpoEnvio() {
-    return {
-      titulo: titulo.trim(),
-      contenido: mensaje.trim(),
-      tipo,
-      imagen: imagen.trim() || undefined,
-      url: destino === "ninguno" ? undefined : destino,
-      user_id: tipo === "individual" ? cedula.trim() : undefined,
-      segmento: tipo === "segmentada" ? JSON.stringify(segmento) : undefined,
-      fecha_enviar:
-        cuando === "programar" ? new Date(`${fecha}T${hora}:00`).toISOString() : undefined,
+  const cargar = useCallback(async () => {
+    setCargando(true)
+    try {
+      setHistorial(
+        await listarNotificaciones(filtroEstado === "todos" ? undefined : filtroEstado)
+      )
+      setError(null)
+    } catch (err) {
+      setError(mensajeDeError(err))
+    } finally {
+      setCargando(false)
     }
+  }, [filtroEstado])
+
+  useEffect(() => {
+    void cargar()
+  }, [cargar])
+
+  const valores = separarLista(valoresSegmento)
+  const diasMoraValidos =
+    !diasMora.trim() || (Number.isInteger(Number(diasMora)) && Number(diasMora) > 0)
+
+  function armarSegmento(): Record<string, unknown> {
+    if (criterio === "mora") {
+      return diasMora.trim()
+        ? { en_mora: true, dias_mora_min: Number(diasMora) }
+        : { en_mora: true }
+    }
+    if (criterio === "cedulas") return { cedulas: valores }
+    if (criterio === "lotes") return { lotes: valores.map((v) => v.toUpperCase()) }
+    return { prefijos_proyecto: valores.map((v) => v.toUpperCase()) }
   }
 
-  function enviar() {
-    // PENDIENTE: POST /notifications con este cuerpo.
-    void armarCuerpoEnvio()
-    toast({
-      variant: "info",
-      title: "Aún no disponible",
-      description: "El envío de notificaciones se conectará próximamente.",
-    })
+  const resumenSegmento =
+    criterio === "mora"
+      ? diasMora.trim()
+        ? `con ${diasMora} días de mora o más`
+        : "con cuotas en mora"
+      : valores.length === 0
+        ? null
+        : criterio === "cedulas"
+          ? `con ${valores.length === 1 ? "la cédula" : `estas ${valores.length} cédulas`}`
+          : criterio === "lotes"
+            ? `dueños de ${valores.length === 1 ? "el lote" : "los lotes"} ${valores.join(", ")}`
+            : `con lotes de ${valores.join(", ")}`
+
+  const imagenInvalida =
+    imagen.trim().length > 0 && !/^https:\/\/\S+$/i.test(imagen.trim())
+  const fechaProgramada =
+    cuando === "programar" && fecha && hora ? new Date(`${fecha}T${hora}:00`) : null
+  const fechaPasada = fechaProgramada !== null && fechaProgramada.getTime() < Date.now()
+
+  const puedeEnviar =
+    !enviando &&
+    titulo.trim().length > 0 &&
+    mensaje.trim().length > 0 &&
+    !imagenInvalida &&
+    (tipo !== "individual" || cedula.trim().length > 0) &&
+    (tipo !== "segmentada" ||
+      (criterio === "mora" ? diasMoraValidos : valores.length > 0)) &&
+    (cuando === "ahora" || (fechaProgramada !== null && !fechaPasada))
+
+  function limpiarFormulario() {
+    setTitulo("")
+    setMensaje("")
+    setImagen("")
+    setCedula("")
+    setValoresSegmento("")
+    setDiasMora("")
+    setFecha("")
+    setHora("")
+  }
+
+  async function enviar() {
+    setEnviando(true)
+    try {
+      await crearNotificacion({
+        titulo: titulo.trim(),
+        contenido: mensaje.trim(),
+        tipo,
+        imagen: imagen.trim() || undefined,
+        url: destino === "ninguno" ? undefined : destino,
+        user_id: tipo === "individual" ? cedula.trim() : undefined,
+        segmento: tipo === "segmentada" ? armarSegmento() : undefined,
+        fecha_enviar: fechaProgramada ? fechaProgramada.toISOString() : undefined,
+      })
+      toast({
+        variant: "success",
+        description:
+          cuando === "ahora"
+            ? "Notificación en camino. Aparecerá como enviada en unos segundos."
+            : "Notificación programada.",
+      })
+      limpiarFormulario()
+      await cargar()
+    } catch (err) {
+      toast({ variant: "error", description: mensajeDeError(err) })
+    } finally {
+      setEnviando(false)
+    }
   }
 
   return (
@@ -162,7 +238,9 @@ export function NotificacionesAppContent() {
                 <Textarea
                   id="mensaje-notificacion"
                   value={mensaje}
-                  onChange={(event) => setMensaje(event.target.value.slice(0, MAX_MENSAJE))}
+                  onChange={(event) =>
+                    setMensaje(event.target.value.slice(0, MAX_MENSAJE))
+                  }
                   placeholder="Tu cuota de octubre fue registrada."
                   className="bg-card focus-visible:border-primary min-h-[92px] rounded-md px-3.5 py-2.5 shadow-none"
                 />
@@ -170,12 +248,19 @@ export function NotificacionesAppContent() {
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <TextField
-                  label="Imagen (URL, opcional)"
-                  value={imagen}
-                  onChange={setImagen}
-                  placeholder="https://…"
-                />
+                <div>
+                  <TextField
+                    label="Imagen (URL, opcional)"
+                    value={imagen}
+                    onChange={setImagen}
+                    placeholder="https://…"
+                  />
+                  {imagenInvalida ? (
+                    <p className="text-destructive mt-1 text-xs">
+                      Debe empezar con https://
+                    </p>
+                  ) : null}
+                </div>
                 <SelectField
                   label="Al tocarla, abrir"
                   placeholder="Pantalla de la app"
@@ -186,7 +271,9 @@ export function NotificacionesAppContent() {
               </div>
 
               <div className="border-border space-y-3 border-t pt-4">
-                <p className="text-muted-foreground text-xs font-semibold">Destinatarios</p>
+                <p className="text-muted-foreground text-xs font-semibold">
+                  Destinatarios
+                </p>
                 <PillTabs
                   tabs={[
                     { id: "individual", label: "Un usuario" },
@@ -214,56 +301,48 @@ export function NotificacionesAppContent() {
 
                 {tipo === "segmentada" ? (
                   <div className="bg-muted/60 border-border space-y-3 rounded-md border p-3.5">
-                    <div
-                      onClick={() => setEnMora((actual) => !actual)}
-                      className="flex cursor-pointer items-center gap-2.5 text-sm"
-                    >
-                      {/* El clic en la casilla sube a la fila, que es la que cambia el valor. */}
-                      <Checkbox
-                        checked={enMora}
-                        onCheckedChange={() => {}}
-                        aria-label="Usuarios con mora"
-                      />
-                      Usuarios con mora
-                    </div>
-                    <TextField
-                      type="number"
-                      label="Días de mora mínimos"
-                      value={diasMora}
-                      onChange={setDiasMora}
-                      placeholder="Ej. 30"
+                    <PillTabs
+                      tabs={CRITERIOS_SEGMENTO}
+                      value={criterio}
+                      onChange={(id) => {
+                        setCriterio(id as CriterioSegmento)
+                        setValoresSegmento("")
+                      }}
                     />
-                    <TextField
-                      label="Cédulas"
-                      value={cedulas}
-                      onChange={setCedulas}
-                      placeholder="Separadas por coma"
-                    />
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {criterio === "mora" ? (
+                      <div>
+                        <TextField
+                          type="number"
+                          label="Días de mora mínimos (opcional)"
+                          value={diasMora}
+                          onChange={setDiasMora}
+                          placeholder="Ej. 30"
+                        />
+                        {!diasMoraValidos ? (
+                          <p className="text-destructive mt-1 text-xs">
+                            Debe ser un número entero mayor a 0.
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : (
                       <TextField
-                        label="Lotes"
-                        value={lotes}
-                        onChange={setLotes}
-                        placeholder="F-M30-101, G-104"
+                        label={AYUDA_CRITERIO[criterio].label}
+                        value={valoresSegmento}
+                        onChange={setValoresSegmento}
+                        placeholder={AYUDA_CRITERIO[criterio].placeholder}
                       />
-                      <TextField
-                        label="Prefijos de proyecto"
-                        value={prefijos}
-                        onChange={setPrefijos}
-                        placeholder="F-, G-"
-                      />
-                    </div>
+                    )}
                     <p className="text-muted-foreground text-xs">
-                      {resumenSegmento.length > 0 ? (
+                      {resumenSegmento ? (
                         <>
-                          Se enviará a usuarios{" "}
+                          Se enviará a los usuarios{" "}
                           <span className="text-foreground font-semibold">
-                            {resumenSegmento.join(" · ")}
+                            {resumenSegmento}
                           </span>
                           .
                         </>
                       ) : (
-                        "Elige al menos un criterio."
+                        "Escribe al menos un valor, separados por coma."
                       )}
                     </p>
                   </div>
@@ -286,12 +365,17 @@ export function NotificacionesAppContent() {
                     <TimePickerField label="Hora" value={hora} onChange={setHora} />
                   </div>
                 ) : null}
+                {fechaPasada ? (
+                  <p className="text-destructive text-xs">Esa fecha y hora ya pasaron.</p>
+                ) : null}
               </div>
             </div>
 
             <div className="border-border flex justify-end border-t p-4">
-              <Button disabled={!puedeEnviar} onClick={enviar}>
-                {cuando === "ahora" ? (
+              <Button disabled={!puedeEnviar} onClick={() => void enviar()}>
+                {enviando ? (
+                  "Enviando…"
+                ) : cuando === "ahora" ? (
                   <>
                     <Send className="size-4" strokeWidth={1.8} />
                     Enviar notificación
@@ -317,7 +401,8 @@ export function NotificacionesAppContent() {
                   size="icon"
                   className="size-8"
                   aria-label="Actualizar historial"
-                  onClick={() => toast({ variant: "info", description: "Historial actualizado." })}
+                  disabled={cargando}
+                  onClick={() => void cargar()}
                 >
                   <RefreshCw className="size-3.5" strokeWidth={1.8} />
                 </Button>
@@ -331,13 +416,28 @@ export function NotificacionesAppContent() {
               />
             </div>
 
-            {filtradas.length === 0 ? (
+            {cargando && historial.length === 0 ? (
+              <div className="flex items-center justify-center py-12">
+                <Spinner />
+              </div>
+            ) : error ? (
               <div className="p-4 sm:p-6">
-                <EmptyState title="Sin notificaciones" description="No hay notificaciones en este estado." />
+                <EmptyState
+                  title="No se pudo cargar el historial"
+                  description={error}
+                  dashed
+                />
+              </div>
+            ) : historial.length === 0 ? (
+              <div className="p-4 sm:p-6">
+                <EmptyState
+                  title="Sin notificaciones"
+                  description="No hay notificaciones en este estado."
+                />
               </div>
             ) : (
               <ul className="divide-border divide-y">
-                {filtradas.map((n) => (
+                {historial.map((n) => (
                   <li key={n.id}>
                     <button
                       type="button"
@@ -345,18 +445,25 @@ export function NotificacionesAppContent() {
                       className="hover:bg-muted/60 group flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors sm:px-6"
                     >
                       <div className="bg-accent mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md">
-                        <Bell className="text-accent-foreground size-4" strokeWidth={1.7} />
+                        <Bell
+                          className="text-accent-foreground size-4"
+                          strokeWidth={1.7}
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[13px] font-semibold">{n.titulo}</p>
                         <p className="text-muted-foreground mt-0.5 truncate text-xs">
-                          {TIPO_LABELS[n.tipo]}
-                          {n.destinatarios > 0 ? ` · ${n.destinatarios} destinatarios` : ""} ·{" "}
-                          {formatearFechaHora(n.fechaEnvio ?? n.fechaEnviar)}
+                          {n.tipo === "individual" && n.userId
+                            ? n.userId
+                            : TIPO_LABELS[n.tipo]}
+                          {n.destinatarios > 0
+                            ? ` · ${n.destinatarios} destinatarios`
+                            : ""}{" "}
+                          · {formatearFechaHora(n.fechaEnvio ?? n.fechaEnviar)}
                         </p>
                       </div>
-                      <StatusBadge variant={VARIANTE_ESTADO[n.estado]}>
-                        {ESTADO_LABELS[n.estado]}
+                      <StatusBadge variant={VARIANTE_ESTADO[n.estado] ?? "pronto"}>
+                        {ESTADO_LABELS[n.estado] ?? n.estado}
                       </StatusBadge>
                       <ChevronRight
                         className="text-muted-foreground group-hover:text-primary mt-1.5 size-4 shrink-0 transition-colors"
@@ -374,6 +481,7 @@ export function NotificacionesAppContent() {
       <DetalleNotificacionSheet
         notificacion={seleccionada}
         onOpenChange={(abierto) => !abierto && setSeleccionada(null)}
+        onCambio={cargar}
       />
     </div>
   )
@@ -419,7 +527,12 @@ function VistaPrevia({
               </span>
               <span className="text-muted-foreground text-[11px]">ahora</span>
             </div>
-            <p className={cn("truncate text-[13px] font-semibold", !titulo && "text-muted-foreground")}>
+            <p
+              className={cn(
+                "truncate text-[13px] font-semibold",
+                !titulo && "text-muted-foreground"
+              )}
+            >
               {titulo || "Título de la notificación"}
             </p>
             <p

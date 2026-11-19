@@ -1,5 +1,6 @@
 "use client"
 
+import { esTipoContado } from "@/lib/tipos-financiamiento"
 import { descuentoTipoDeRegistro } from "@/lib/descuento-tipo"
 import {
   estadoRefinanciamiento,
@@ -8,13 +9,14 @@ import {
 } from "@/lib/refinanciamiento-estado"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "@/lib/navigation"
-import { ArrowLeft, Plus, Printer, Trash2 } from "lucide-react"
+import { ArrowLeft, Plus, Trash2 } from "lucide-react"
 
 import { useCan } from "@/components/shared/can"
 import { EmptyState } from "@/components/shared/empty-state"
 import { SelectField } from "@/components/shared/select-field"
 import { Spinner } from "@/components/shared/spinner"
 import { Button } from "@/components/ui/button"
+import { BotonImprimir } from "@/components/shared/boton-imprimir"
 import { Input } from "@/components/ui/input"
 import {
   InventarioApiError,
@@ -260,8 +262,21 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
     descuentoTipo +
     (Number(refinanciamiento?.extra_discount) || 0) +
     (Number(refinanciamiento?.promo_discount) || 0)
-  // "TOTAL A FINANCIAR" del encabezado = valor del lote − todos los descuentos.
-  const totalAFinanciar = Math.max(0, valorLoteNumero - descuentosTotales)
+  // "TOTAL A FINANCIAR" del encabezado = valor del lote + adicionales − todos los
+  // descuentos − abono realizado. El abono capital ahora va como fila "Abono capital"
+  // de la tabla de entrada (no resta del valor del lote); solo los refinanciamientos
+  // viejos, guardados sin esa fila, lo siguen restando acá.
+  const abonoCapitalComoFila = (refinanciamiento?.entradas ?? []).some(
+    (fila) => fila.forma_pago === "Abono capital"
+  )
+  const totalAFinanciar = Math.max(
+    0,
+    valorLoteNumero +
+      (Number(refinanciamiento?.adicionales) || 0) -
+      descuentosTotales -
+      (Number(refinanciamiento?.abono_realizado) || 0) -
+      (abonoCapitalComoFila ? 0 : Number(refinanciamiento?.abono_capital) || 0)
+  )
   // Qué se imprime según refinanciamiento.status (lib/refinanciamiento-estado.ts):
   // borrador → con la marca de agua BORRADOR (lo puede imprimir quien lo está
   // armando); guardado = preaprobado, y aprobado → el reporte final, sin marca de agua
@@ -355,10 +370,12 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
           Volver
         </Button>
         {refinanciamiento && puedeImprimir && (
-          <Button onClick={() => window.print()}>
-            <Printer className="size-3.5" strokeWidth={1.8} />
-            Imprimir
-          </Button>
+          <div className="flex items-center gap-2">
+            <BotonImprimir
+              selector=".anexo-imprimible"
+              nombreArchivo={`Refinanciamiento ${id}`}
+            />
+          </div>
         )}
       </div>
 
@@ -556,17 +573,6 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
                 {descuentosTotales > 0 && (
                   <Campo label="DESCUENTO" valor={formatearNumero(descuentosTotales)} />
                 )}
-                {descuentoTipoInfo.anulado && (
-                  <Campo
-                    label={`DESCUENTO ${descuentoTipoInfo.porcentaje * 100}% ${(refinanciamiento.financ_type ?? "").toUpperCase()}`}
-                    valor={
-                      <>
-                        <s>{formatearNumero(descuentoTipoInfo.montoSinPromocion)}</s> (NO
-                        APLICA CON LA PROMOCIÓN)
-                      </>
-                    }
-                  />
-                )}
                 <Campo
                   label="OFRECIMIENTOS"
                   valor={refinanciamiento.ofrecimientos || "—"}
@@ -592,7 +598,7 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
                 {entradas.map((fila, indice) => (
                   <tr key={indice}>
                     <Td>
-                      {(refinanciamiento.financ_type === "Contado" ||
+                      {(esTipoContado(refinanciamiento.financ_type ?? "") ||
                         esBiessLike(refinanciamiento.financ_type)) &&
                       fila.forma_pago === "Entrada"
                         ? "Cuota"
@@ -633,7 +639,7 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
               </tbody>
             </table>
 
-            {refinanciamiento.financ_type !== "Contado" &&
+            {!esTipoContado(refinanciamiento.financ_type ?? "") &&
               !esBiessLike(refinanciamiento.financ_type) && (
                 <>
                   <div className="mb-4 text-[11px] font-bold">
@@ -722,7 +728,7 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
             )}
 
             {reporteFinal && (
-              <div className="mt-16 flex flex-wrap justify-between gap-6">
+              <div className="mt-24 flex flex-wrap justify-between gap-6">
                 <Firma
                   nombre={apoderado ?? titular?.nombre ?? "—"}
                   rol={apoderado ? "APODERADO · C.C N°" : "C.C N°"}
@@ -758,6 +764,13 @@ export function RefinanciamientoImprimirContent({ id }: { id: string }) {
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
           color-adjust: exact;
+        }
+        /* En el teléfono la marca de agua tapa la tabla: solo queda el aviso rojo de
+           arriba (en el PDF del teléfono también se omite, ver lib/imprimir-reporte.ts). */
+        @media screen and (max-width: 767px) {
+          .borrador-watermark {
+            display: none;
+          }
         }
         .amortizacion-tabla thead {
           display: table-header-group;

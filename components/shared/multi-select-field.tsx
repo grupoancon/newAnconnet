@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { EtiquetaCampo } from "@/components/shared/etiqueta-campo"
 
 // Selector de multiples opciones sobre una lista fija (string[], igual que
 // SelectField). El valor vive como string[] en el componente — quien lo consume
@@ -46,7 +47,7 @@ export function MultiSelectField({
     <div>
       {label ? (
         <Label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
-          {label}
+          <EtiquetaCampo>{label}</EtiquetaCampo>
         </Label>
       ) : null}
       <DropdownMenu>
@@ -55,7 +56,7 @@ export function MultiSelectField({
             type="button"
             variant="outline"
             className={cn(
-              "border! border-solid! h-11! w-full! justify-between rounded-md! px-3.5! text-sm font-normal",
+              "h-11! w-full! justify-between rounded-md! border! border-solid! px-3.5! text-sm font-normal",
               className
             )}
           >

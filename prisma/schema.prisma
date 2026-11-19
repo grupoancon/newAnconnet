@@ -1194,3 +1194,26 @@ model Mantenimiento {
 
   @@map("mantenimiento_app")
 }
+
+// Certificado de firma electrónica (.p12) subido desde /configuracion/firma-electronica.
+// Una sola fila (id = 1). `contenidoCifrado` = .p12 + contraseña cifrados con AES-256-GCM
+// usando FIRMA_CLAVE_MAESTRA (entorno del servidor, nunca en la base). El resto son datos
+// públicos del certificado para mostrar en pantalla. Ver lib/firma/almacen.ts.
+// La tabla se crea a mano — ver prisma/sql/firma_certificado_app.sql.
+model FirmaCertificado {
+  id               Int       @id @default(1)
+  activo           Boolean   @default(true)
+  contenidoCifrado Bytes     @db.MediumBlob
+  titular          String?   @db.VarChar(191)
+  identificacion   String?   @db.VarChar(64)
+  emisor           String?   @db.VarChar(191)
+  serie            String?   @db.VarChar(128)
+  validoDesde      DateTime?
+  validoHasta      DateTime?
+  nombreArchivo    String?   @db.VarChar(191)
+  subidoPorId      String?   @db.VarChar(36)
+  subidoPor        String?   @db.VarChar(191)
+  updatedAt        DateTime  @default(now()) @updatedAt
+
+  @@map("firma_certificado_app")
+}
