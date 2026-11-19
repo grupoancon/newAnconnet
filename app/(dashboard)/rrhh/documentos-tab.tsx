@@ -5,6 +5,7 @@ import { ArrowLeft, Download, Eye, FileText, Trash2, Upload, X } from "lucide-re
 
 import { useCan } from "@/components/shared/can"
 import { EmptyState } from "@/components/shared/empty-state"
+import { PiePaginado, usePaginado } from "@/components/shared/paginado"
 import { PillTabs } from "@/components/shared/pill-tabs"
 import { SelectField } from "@/components/shared/select-field"
 import { Spinner } from "@/components/shared/spinner"
@@ -168,6 +169,7 @@ function TablaDocumentos({
 }) {
   const toast = useToast()
   const [abriendoId, setAbriendoId] = useState<number | null>(null)
+  const paginado = usePaginado(documentos)
   const [visor, setVisor] = useState<{
     documento: DocumentoRrhhBackend
     url: string
@@ -206,12 +208,12 @@ function TablaDocumentos({
           </tr>
         </thead>
         <tbody>
-          {documentos.map((documento, index) => (
+          {paginado.visibles.map((documento, index) => (
             <tr
               key={documento.id}
               className={cn(
                 "hover:bg-muted/60 transition-colors",
-                index < documentos.length - 1 && "border-border border-b"
+                index < paginado.visibles.length - 1 && "border-border border-b"
               )}
             >
               <td data-label="Documento" className="px-5 py-3.5">
@@ -273,6 +275,7 @@ function TablaDocumentos({
           ))}
         </tbody>
       </table>
+      <PiePaginado {...paginado} etiqueta={["documento", "documentos"]} />
       {visor && (
         <VisorDocumento
           documento={visor.documento}
@@ -604,6 +607,15 @@ function ExpedientesColaboradores() {
     cargarConteo()
   }, [])
 
+  const termino = busqueda.trim().toLowerCase()
+  const visibles = (colaboradores ?? []).filter(
+    (c) =>
+      !termino ||
+      c.nombre.toLowerCase().includes(termino) ||
+      (c.departamento ?? "").toLowerCase().includes(termino)
+  )
+  const paginado = usePaginado(visibles)
+
   if (seleccionado) {
     return (
       <>
@@ -633,13 +645,6 @@ function ExpedientesColaboradores() {
     )
   }
 
-  const termino = busqueda.trim().toLowerCase()
-  const visibles = (colaboradores ?? []).filter(
-    (c) =>
-      !termino ||
-      c.nombre.toLowerCase().includes(termino) ||
-      (c.departamento ?? "").toLowerCase().includes(termino)
-  )
 
   return (
     <>
@@ -679,12 +684,12 @@ function ExpedientesColaboradores() {
               </tr>
             </thead>
             <tbody>
-              {visibles.map((colaborador, index) => (
+              {paginado.visibles.map((colaborador, index) => (
                 <tr
                   key={colaborador.id}
                   className={cn(
                     "hover:bg-muted/60 transition-colors",
-                    index < visibles.length - 1 && "border-border border-b"
+                    index < paginado.visibles.length - 1 && "border-border border-b"
                   )}
                 >
                   <td
@@ -721,6 +726,9 @@ function ExpedientesColaboradores() {
               ))}
             </tbody>
           </table>
+        )}
+        {visibles.length > 0 && (
+          <PiePaginado {...paginado} etiqueta={["colaborador", "colaboradores"]} />
         )}
       </div>
     </>

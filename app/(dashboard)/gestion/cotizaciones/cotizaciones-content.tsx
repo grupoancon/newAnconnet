@@ -7,6 +7,8 @@ import { Plus } from "lucide-react"
 import { useCan } from "@/components/shared/can"
 import { DashboardTopbar } from "@/components/shared/dashboard-topbar"
 import { EmptyState } from "@/components/shared/empty-state"
+import { FilterSearchInput } from "@/components/shared/filter-bar"
+import { PiePaginado, usePaginado } from "@/components/shared/paginado"
 import { PageHeader } from "@/components/shared/page-header"
 import { Spinner } from "@/components/shared/spinner"
 import { StatusBadge, type StatusVariant } from "@/components/shared/status-badge"
@@ -34,6 +36,14 @@ function formatearMoneda(valor: string | number | null | undefined): string {
   }).format(numero)
 }
 
+function normalizarTexto(texto: string | null | undefined): string {
+  return (texto ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+}
+
 function formatearFecha(fecha: string | null | undefined): string {
   if (!fecha) return "—"
   const [anio, mes, dia] = fecha.slice(0, 10).split("-")
@@ -59,6 +69,26 @@ function TablaCotizaciones({
   mostrarCreador: boolean
 }) {
   const router = useRouter()
+  const [busqueda, setBusqueda] = useState("")
+
+  // Búsqueda por cliente, lote, proyecto o asesor (sin tildes ni mayúsculas).
+  const filtradas = useMemo(() => {
+    const termino = normalizarTexto(busqueda)
+    if (!termino) return cotizaciones as Array<CotizacionBackend | CotizacionConCreador>
+    return (cotizaciones as Array<CotizacionBackend | CotizacionConCreador>).filter((fila) =>
+      normalizarTexto(
+        [
+          fila.cliente_nombre,
+          fila.codigo_lote,
+          proyectosPorId.get(fila.id_proyecto),
+          "creador_nombre" in fila ? fila.creador_nombre : null,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      ).includes(termino)
+    )
+  }, [busqueda, cotizaciones, proyectosPorId])
+  const paginado = usePaginado(filtradas)
 
   if (cotizaciones.length === 0) {
     return (
@@ -69,8 +99,8 @@ function TablaCotizaciones({
   }
 
   const columnas = mostrarCreador
-    ? "1fr_1.4fr_1fr_1fr_1fr_1fr_40px"
-    : "1fr_1.4fr_1fr_1fr_1fr_40px"
+    ? "0.9fr_1fr_1.4fr_1fr_1fr_1fr_1fr_40px"
+    : "0.9fr_1fr_1.4fr_1fr_1fr_1fr_40px"
 
   function abrir(fila: CotizacionBackend | CotizacionConCreador) {
     router.push(
@@ -82,9 +112,28 @@ function TablaCotizaciones({
 
   return (
     <>
+      <div className="mb-3.5 flex">
+        <FilterSearchInput
+          placeholder={
+            mostrarCreador ? "Buscar cliente, lote o asesor…" : "Buscar cliente o lote…"
+          }
+          value={busqueda}
+          onChange={(valor) => {
+            setBusqueda(valor)
+            paginado.setPagina(1)
+          }}
+        />
+      </div>
+
+      {filtradas.length === 0 && (
+        <div className="text-muted-foreground border-border rounded-lg border px-4.5 py-8 text-center text-sm">
+          Ninguna cotización coincide con la búsqueda.
+        </div>
+      )}
+
       {/* Mobile: una tarjeta por cotización (la tabla de 6-7 columnas no entra). */}
       <div className="flex flex-col gap-2.5 md:hidden">
-        {cotizaciones.map((fila) => {
+        {paginado.visibles.map((fila) => {
           const creadorNombre = "creador_nombre" in fila ? fila.creador_nombre : null
           return (
             <button
@@ -102,11 +151,12 @@ function TablaCotizaciones({
               <div className="text-muted-foreground text-xs">
                 {proyectosPorId.get(fila.id_proyecto) ?? "—"}
                 <span className="font-mono"> · {fila.codigo_lote}</span>
+                {fila.financ_type ? <span> · {fila.financ_type}</span> : null}
               </div>
               <div className="border-border flex items-end justify-between gap-3 border-t pt-2">
                 <div>
                   <div className="text-muted-foreground text-[10.5px] font-bold tracking-wide">
-                    TOTAL A FINANCIAR
+                    PRECIO DE VENTA
                   </div>
                   <div className="font-mono text-sm font-semibold">
                     {formatearMoneda(fila.total_financ)}
@@ -122,7 +172,12 @@ function TablaCotizaciones({
         })}
       </div>
 
-      <div className="border-border hidden overflow-hidden rounded-lg border md:block">
+      <div
+        className={cn(
+          "border-border hidden overflow-hidden rounded-lg border",
+          filtradas.length > 0 && "md:block"
+        )}
+      >
         <div
           className={cn(
             "text-muted-foreground bg-muted/60 border-border grid border-b px-4.5 py-2.75 text-[11px] font-bold tracking-wide"
@@ -130,14 +185,15 @@ function TablaCotizaciones({
           style={{ gridTemplateColumns: columnas.split("_").join(" ") }}
         >
           <span>FECHA</span>
+          <span>TIPO DE FINANCIAMIENTO</span>
           <span>CLIENTE</span>
           <span>PROYECTO / LOTE</span>
-          <span>TOTAL A FINANCIAR</span>
+          <span>PRECIO DE VENTA</span>
           {mostrarCreador && <span>CREADO POR</span>}
           <span>ESTADO</span>
           <span />
         </div>
-        {cotizaciones.map((fila, index) => {
+        {paginado.visibles.map((fila, index) => {
           const creadorNombre = "creador_nombre" in fila ? fila.creador_nombre : null
           return (
             <div
@@ -145,11 +201,12 @@ function TablaCotizaciones({
               onClick={() => abrir(fila)}
               className={cn(
                 "hover:bg-muted/60 grid cursor-pointer items-center px-4.5 py-3.5 text-[13px] transition-colors",
-                index < cotizaciones.length - 1 && "border-border border-b"
+                index < paginado.visibles.length - 1 && "border-border border-b"
               )}
               style={{ gridTemplateColumns: columnas.split("_").join(" ") }}
             >
               <span className="font-mono">{formatearFecha(fila.created_at)}</span>
+              <span className="pr-2">{fila.financ_type ?? "—"}</span>
               <span className="font-semibold">{fila.cliente_nombre}</span>
               <span className="text-muted-foreground">
                 {proyectosPorId.get(fila.id_proyecto) ?? "—"}
@@ -167,6 +224,12 @@ function TablaCotizaciones({
           )
         })}
       </div>
+
+      {filtradas.length > 0 && (
+        <div className="mt-1 [&>div]:border-t-0 [&>div]:px-0">
+          <PiePaginado {...paginado} etiqueta={["cotización", "cotizaciones"]} />
+        </div>
+      )}
     </>
   )
 }

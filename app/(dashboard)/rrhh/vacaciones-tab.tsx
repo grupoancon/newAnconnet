@@ -18,6 +18,12 @@ import { DatePickerField } from "@/components/shared/date-picker-field"
 import { EmptyState } from "@/components/shared/empty-state"
 import { Spinner } from "@/components/shared/spinner"
 import { MotivoRechazo } from "@/components/shared/motivo-rechazo"
+import {
+  BarraMisTodas,
+  filtrarPorTexto,
+  type VistaMisTodas,
+} from "@/components/shared/mis-todas"
+import { PiePaginado, usePaginado } from "@/components/shared/paginado"
 import { StatusBadge, type StatusVariant } from "@/components/shared/status-badge"
 import { TextField } from "@/components/shared/text-field"
 import { useToast } from "@/components/shared/toast-provider"
@@ -170,6 +176,8 @@ export function VacacionesTab() {
   const [soloSinDescargar, setSoloSinDescargar] = useState(false)
   const [seguimientoAbierto, setSeguimientoAbierto] = useState(false)
   const [cambiandoAplicaId, setCambiandoAplicaId] = useState<number | null>(null)
+  const [vista, setVista] = useState<VistaMisTodas>("mias")
+  const [busqueda, setBusqueda] = useState("")
 
   // `propia`: la solicitud es del usuario logeado (su perfil alcanza); si no, es una ajena
   // vista por RRHH y el solicitante se busca en la lista de colaboradores.
@@ -192,11 +200,13 @@ export function VacacionesTab() {
         cargarPropias()
         cargarAdmin()
       }
-    } catch {
+    } catch (err) {
+      console.error("Error al generar el reporte", err)
       toast({
         variant: "error",
         title: "No se pudo generar el reporte",
-        description: "Intenta de nuevo.",
+        description:
+          err instanceof Error && err.message ? err.message : "Intenta de nuevo.",
       })
     } finally {
       setDescargandoId(null)
@@ -444,6 +454,26 @@ export function VacacionesTab() {
   const colectivasSinDescargar = colectivasAplican.filter((s) => !s.reporte_descargado_at)
   const colectivasVisibles = soloSinDescargar ? colectivasSinDescargar : colectivas
   const todasSinColectivas = (todasSolicitudes ?? []).filter((s) => !s.colectiva)
+  const vistaActual: VistaMisTodas = puedeGestionar ? vista : "mias"
+  const misFiltradas = filtrarPorTexto(misSolicitudes, busqueda, (s) => [
+    s.holidaysPeriod,
+    formatearFecha(s.dateS),
+    formatearFecha(s.dateE),
+    s.state,
+    s.details,
+  ])
+  const todasFiltradas =
+    filtrarPorTexto(todasSinColectivas, busqueda, (s) => [
+      s.creador_nombre,
+      s.departmentSoliciter,
+      s.holidaysPeriod,
+      formatearFecha(s.dateS),
+      formatearFecha(s.dateE),
+      s.state,
+    ]) ?? []
+  const paginadoColectivas = usePaginado(colectivasVisibles)
+  const paginadoMias = usePaginado(misFiltradas)
+  const paginadoTodas = usePaginado(todasFiltradas)
   const miColectivaPendiente =
     (misSolicitudes ?? []).find(
       (s) =>
@@ -613,7 +643,7 @@ export function VacacionesTab() {
       )}
 
       {puedeGestionar && (
-        <div className="bg-card border-border overflow-hidden rounded-lg border">
+        <div className="bg-card border-border overflow-x-auto rounded-lg border">
           <div className="border-border text-muted-foreground border-b px-5 py-3.5 text-xs font-bold tracking-wide">
             VACACIONES DE DICIEMBRE (TODOS LOS COLABORADORES)
           </div>
@@ -697,13 +727,13 @@ export function VacacionesTab() {
                     </tr>
                   </thead>
                   <tbody>
-                    {colectivasVisibles.map((solicitud, index) => (
+                    {paginadoColectivas.visibles.map((solicitud, index) => (
                       <tr
                         key={solicitud.id}
                         className={cn(
                           "hover:bg-muted/60 transition-colors",
                           solicitud.state === "no_aplica" && "opacity-60",
-                          index < colectivasVisibles.length - 1 &&
+                          index < paginadoColectivas.visibles.length - 1 &&
                             "border-border border-b"
                         )}
                       >
@@ -772,6 +802,7 @@ export function VacacionesTab() {
                   </tbody>
                 </table>
               )}
+              <PiePaginado {...paginadoColectivas} />
             </>
           )}
         </div>
@@ -819,95 +850,125 @@ export function VacacionesTab() {
         </div>
       )}
 
-      <div className="bg-card border-border overflow-hidden rounded-lg border">
-        <div className="border-border text-muted-foreground border-b px-5 py-3.5 text-xs font-bold tracking-wide">
-          MIS SOLICITUDES DE VACACIONES
-        </div>
-        {!misSolicitudes || misSolicitudes.length === 0 ? (
-          <div className="p-5">
-            <EmptyState
-              title="Todavía no has solicitado vacaciones"
-              description="Usa “Nueva solicitud” o elige un periodo publicado por RRHH."
-            />
-          </div>
-        ) : (
-          <table className="tabla-apilada w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-muted/60 text-muted-foreground text-[10.5px] font-bold tracking-wide">
-                <th className="px-5 py-2.75 text-left">PERIODO</th>
-                <th className="px-5 py-2.75 text-left">FECHAS</th>
-                <th className="px-5 py-2.75 text-left">DÍAS</th>
-                <th className="px-5 py-2.75 text-left">ESTADO</th>
-                <th className="px-5 py-2.75 text-left">REPORTE</th>
-              </tr>
-            </thead>
-            <tbody>
-              {misSolicitudes.map((solicitud, index) => (
-                <tr
-                  key={solicitud.id}
-                  className={cn(
-                    "transition-colors",
-                    index < misSolicitudes.length - 1 && "border-border border-b"
-                  )}
-                >
-                  <td data-label="Periodo" className="px-5 py-3.5 font-semibold">
-                    {solicitud.holidaysPeriod ?? "—"}
-                  </td>
-                  <td
-                    data-label="Fechas"
-                    className="text-muted-foreground px-5 py-3.5 font-mono text-[11.5px]"
-                  >
-                    {formatearFecha(solicitud.dateS)} – {formatearFecha(solicitud.dateE)}
-                  </td>
-                  <td data-label="Días" className="px-5 py-3.5 font-mono font-semibold">
-                    {solicitud.approvedDays ?? solicitud.requestedDays ?? "—"}
-                  </td>
-                  <td data-label="Estado" className="px-5 py-3.5">
-                    <StatusBadge variant={normalizarEstado(solicitud.state)} />
-                    <MotivoRechazo
-                      estado={solicitud.state}
-                      motivo={solicitud.observation}
-                    />
-                  </td>
-                  <td data-label="Reporte" className="px-5 py-3.5">
-                    {normalizarEstado(solicitud.state) === "aprobado" && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          aria-label="Descargar reporte"
-                          title="Descargar reporte"
-                          className="text-primary disabled:opacity-40"
-                          disabled={descargandoId === solicitud.id}
-                          onClick={() => manejarDescargar(solicitud, true)}
-                        >
-                          <Download className="size-4" strokeWidth={1.7} />
-                        </button>
-                        {solicitud.colectiva && (
-                          <span
-                            className={cn(
-                              "text-xs font-semibold",
-                              solicitud.reporte_descargado_at
-                                ? "text-status-disponible-fg"
-                                : "text-status-reservado-fg"
-                            )}
-                          >
-                            {solicitud.reporte_descargado_at
-                              ? "Descargado"
-                              : "Pendiente de descargar"}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <BarraMisTodas
+        mostrarTodas={puedeGestionar}
+        vista={vistaActual}
+        onVista={(valor) => {
+          setVista(valor)
+          paginadoMias.setPagina(1)
+          paginadoTodas.setPagina(1)
+        }}
+        etiquetas={["Mis vacaciones", "Todas las vacaciones"]}
+        busqueda={busqueda}
+        onBusqueda={(valor) => {
+          setBusqueda(valor)
+          paginadoMias.setPagina(1)
+          paginadoTodas.setPagina(1)
+        }}
+        placeholder={
+          vistaActual === "todas"
+            ? "Buscar colaborador, departamento o periodo…"
+            : "Buscar periodo, fecha o estado…"
+        }
+      />
 
-      {puedeGestionar && (
-        <div className="bg-card border-border overflow-hidden rounded-lg border">
+      {vistaActual === "mias" && (
+        <div className="bg-card border-border -mt-2.5 overflow-x-auto rounded-lg border">
+          <div className="border-border text-muted-foreground border-b px-5 py-3.5 text-xs font-bold tracking-wide">
+            MIS SOLICITUDES DE VACACIONES
+          </div>
+          {!misSolicitudes || misSolicitudes.length === 0 ? (
+            <div className="p-5">
+              <EmptyState
+                title="Todavía no has solicitado vacaciones"
+                description="Usa “Nueva solicitud” o elige un periodo publicado por RRHH."
+              />
+            </div>
+          ) : misFiltradas!.length === 0 ? (
+            <div className="text-muted-foreground px-5 py-8 text-center text-sm">
+              Ninguna solicitud coincide con la búsqueda.
+            </div>
+          ) : (
+            <table className="tabla-apilada w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-muted/60 text-muted-foreground text-[10.5px] font-bold tracking-wide">
+                  <th className="px-5 py-2.75 text-left">PERIODO</th>
+                  <th className="px-5 py-2.75 text-left">FECHAS</th>
+                  <th className="px-5 py-2.75 text-left">DÍAS</th>
+                  <th className="px-5 py-2.75 text-left">ESTADO</th>
+                  <th className="px-5 py-2.75 text-left">REPORTE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginadoMias.visibles.map((solicitud, index) => (
+                  <tr
+                    key={solicitud.id}
+                    className={cn(
+                      "transition-colors",
+                      index < paginadoMias.visibles.length - 1 && "border-border border-b"
+                    )}
+                  >
+                    <td data-label="Periodo" className="px-5 py-3.5 font-semibold">
+                      {solicitud.holidaysPeriod ?? "—"}
+                    </td>
+                    <td
+                      data-label="Fechas"
+                      className="text-muted-foreground px-5 py-3.5 font-mono text-[11.5px]"
+                    >
+                      {formatearFecha(solicitud.dateS)} –{" "}
+                      {formatearFecha(solicitud.dateE)}
+                    </td>
+                    <td data-label="Días" className="px-5 py-3.5 font-mono font-semibold">
+                      {solicitud.approvedDays ?? solicitud.requestedDays ?? "—"}
+                    </td>
+                    <td data-label="Estado" className="px-5 py-3.5">
+                      <StatusBadge variant={normalizarEstado(solicitud.state)} />
+                      <MotivoRechazo
+                        estado={solicitud.state}
+                        motivo={solicitud.observation}
+                      />
+                    </td>
+                    <td data-label="Reporte" className="px-5 py-3.5">
+                      {normalizarEstado(solicitud.state) === "aprobado" && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            aria-label="Descargar reporte"
+                            title="Descargar reporte"
+                            className="text-primary disabled:opacity-40"
+                            disabled={descargandoId === solicitud.id}
+                            onClick={() => manejarDescargar(solicitud, true)}
+                          >
+                            <Download className="size-4" strokeWidth={1.7} />
+                          </button>
+                          {solicitud.colectiva && (
+                            <span
+                              className={cn(
+                                "text-xs font-semibold",
+                                solicitud.reporte_descargado_at
+                                  ? "text-status-disponible-fg"
+                                  : "text-status-reservado-fg"
+                              )}
+                            >
+                              {solicitud.reporte_descargado_at
+                                ? "Descargado"
+                                : "Pendiente de descargar"}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <PiePaginado {...paginadoMias} etiqueta={["solicitud", "solicitudes"]} />
+        </div>
+      )}
+
+      {vistaActual === "todas" && (
+        <div className="bg-card border-border -mt-2.5 overflow-x-auto rounded-lg border">
           <div className="border-border text-muted-foreground border-b px-5 py-3.5 text-xs font-bold tracking-wide">
             TODAS LAS SOLICITUDES
           </div>
@@ -917,6 +978,10 @@ export function VacacionesTab() {
                 title="Todavía no hay solicitudes de vacaciones"
                 description="Van a aparecer acá apenas algún colaborador elija un periodo."
               />
+            </div>
+          ) : todasFiltradas.length === 0 ? (
+            <div className="text-muted-foreground px-5 py-8 text-center text-sm">
+              Ninguna solicitud coincide con la búsqueda.
             </div>
           ) : (
             <table className="tabla-apilada w-full border-collapse text-sm">
@@ -930,12 +995,13 @@ export function VacacionesTab() {
                 </tr>
               </thead>
               <tbody>
-                {todasSinColectivas.map((solicitud, index) => (
+                {paginadoTodas.visibles.map((solicitud, index) => (
                   <tr
                     key={solicitud.id}
                     className={cn(
                       "hover:bg-muted/60 transition-colors",
-                      index < todasSinColectivas.length - 1 && "border-border border-b"
+                      index < paginadoTodas.visibles.length - 1 &&
+                        "border-border border-b"
                     )}
                   >
                     <td data-label="Acciones" className="px-5 py-3.5">
@@ -977,6 +1043,10 @@ export function VacacionesTab() {
                       className="px-5 py-3.5 font-bold whitespace-nowrap"
                     >
                       {solicitud.creador_nombre ?? "—"}
+                      <MotivoRechazo
+                        estado={solicitud.state}
+                        motivo={solicitud.observation}
+                      />
                     </td>
                     <td data-label="Periodo" className="px-5 py-3.5">
                       {solicitud.holidaysPeriod ?? "—"}
@@ -986,16 +1056,13 @@ export function VacacionesTab() {
                     </td>
                     <td data-label="Estado" className="px-5 py-3.5">
                       <StatusBadge variant={normalizarEstado(solicitud.state)} />
-                      <MotivoRechazo
-                        estado={solicitud.state}
-                        motivo={solicitud.observation}
-                      />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
+          <PiePaginado {...paginadoTodas} etiqueta={["solicitud", "solicitudes"]} />
         </div>
       )}
 

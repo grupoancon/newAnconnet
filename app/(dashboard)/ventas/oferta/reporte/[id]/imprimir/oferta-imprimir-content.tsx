@@ -357,11 +357,15 @@ export function OfertaImprimirContent({ id }: { id: string }) {
     cantidadPromociones: financiamiento?.promociones?.length ?? 0,
     valorLote: precioNumero,
   }).monto
+  // Ventas históricas (migradas de la intranet antigua) pueden no tener financiamiento:
+  // ahí se usa el descuento total que traía la oferta vieja (ofertas.cli_descuento).
   const descuentoMonto = financiamiento
     ? descuentoTipo +
       (Number(financiamiento.extra_discount) || 0) +
       (Number(financiamiento.promo_discount) || 0)
-    : null
+    : oferta?.cli_descuento != null
+      ? Number(oferta.cli_descuento) || 0
+      : null
   const total = precioNumero - (descuentoMonto ?? 0)
 
   return (
@@ -572,7 +576,10 @@ export function OfertaImprimirContent({ id }: { id: string }) {
                   label="TIPO DE INMUEBLE"
                   valor={tipoInmueble || oferta.cli_tipoInmueble}
                 />
-                <Campo label="OFRECIMIENTO" valor={financiamiento?.ofrecimientos} />
+                <Campo
+                  label="OFRECIMIENTO"
+                  valor={financiamiento?.ofrecimientos ?? oferta.cli_ofrecimiento}
+                />
                 <Campo
                   label="LUGAR DE VENTA"
                   valor={
@@ -947,15 +954,22 @@ function Hoja({
 // distintos; jubilado y otro solo muestran la actividad.
 function DatosLaboralesCliente({ oferta }: { oferta: OfertaBackend }) {
   const actividad = oferta.cli_trabActividad
-  const esDependiente = actividad === "DEPENDIENTE" || actividad === "EMPLEADO"
+  // Ofertas históricas (migradas de la intranet antigua) no tienen actividad: ahí se
+  // muestran tal cual los datos de trabajo que se ingresaron (empresa, cargo, dirección,
+  // teléfono), sin aplicar las reglas por actividad del wizard actual.
+  const sinActividad = !actividad
+  const esDependiente =
+    sinActividad || actividad === "DEPENDIENTE" || actividad === "EMPLEADO"
   const esIndependiente = actividad === "INDEPENDIENTE" || actividad === "COMERCIANTE"
   const esRemesas = actividad === "REMESAS DEL EXTERIOR"
 
   return (
     <>
-      <Fila3>
-        <Campo label="Actividad" valor={actividad} ancho={3} />
-      </Fila3>
+      {!sinActividad && (
+        <Fila3>
+          <Campo label="Actividad" valor={actividad} ancho={3} />
+        </Fila3>
+      )}
       {esDependiente && (
         <>
           <Fila3>

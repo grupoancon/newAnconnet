@@ -5,6 +5,7 @@ import { Pencil } from "lucide-react"
 
 import { useCan } from "@/components/shared/can"
 import { EmptyState } from "@/components/shared/empty-state"
+import { PiePaginado, usePaginado } from "@/components/shared/paginado"
 import { Spinner } from "@/components/shared/spinner"
 import { TextField } from "@/components/shared/text-field"
 import { useToast } from "@/components/shared/toast-provider"
@@ -53,6 +54,7 @@ export function ColaboradoresTab() {
   const puedeGestionar = useCan("rrhh:gestionar")
 
   const [colaboradores, setColaboradores] = useState<ColaboradorBackend[] | null>(null)
+  const paginado = usePaginado(colaboradores)
   const [error, setError] = useState<string | null>(null)
 
   const [edicion, setEdicion] = useState<ColaboradorBackend | null>(null)
@@ -140,7 +142,7 @@ export function ColaboradoresTab() {
               </tr>
             </thead>
             <tbody>
-              {colaboradores!.map((colaborador, index) => {
+              {paginado.visibles.map((colaborador, index) => {
                 const saldoTotal =
                   colaborador.diasVacaciones +
                   colaborador.diasAumentados -
@@ -150,7 +152,7 @@ export function ColaboradoresTab() {
                     key={colaborador.id}
                     className={cn(
                       "hover:bg-muted/60 transition-colors",
-                      index < colaboradores!.length - 1 && "border-border border-b"
+                      index < paginado.visibles.length - 1 && "border-border border-b"
                     )}
                   >
                     <td data-label="Acciones" className="px-5 py-3.5">
@@ -226,6 +228,7 @@ export function ColaboradoresTab() {
             </tbody>
           </table>
         )}
+        <PiePaginado {...paginado} etiqueta={["colaborador", "colaboradores"]} />
       </div>
 
       <Sheet open={!!edicion} onOpenChange={(valor) => !valor && setEdicion(null)}>

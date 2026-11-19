@@ -22,9 +22,11 @@ import {
 } from "@/lib/api/inventario-api"
 import {
   VentasApiError,
+  listarRefinanciamientosAnterioresDelLote,
   listarRefinanciamientosDeProceso,
   obtenerProceso,
   type ProcesoBackend,
+  type RefinanciamientoAnteriorBackend,
   type RefinanciamientoBackend,
 } from "@/lib/api/ventas-api"
 import { cn } from "@/lib/utils"
@@ -63,6 +65,8 @@ export function HistorialRefinanciamientosContent({ procesoId }: { procesoId: st
   const [refinanciamientos, setRefinanciamientos] = useState<
     RefinanciamientoBackend[] | null
   >(null)
+  // Del/los dueño(s) anterior(es) del mismo lote (lote revendido) — solo lectura.
+  const [anteriores, setAnteriores] = useState<RefinanciamientoAnteriorBackend[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -86,15 +90,18 @@ export function HistorialRefinanciamientosContent({ procesoId }: { procesoId: st
         }
         setProceso(procesoData)
 
-        const [lote, lista] = await Promise.all([
+        const [lote, lista, listaAnteriores] = await Promise.all([
           procesoData.cli_lote
             ? obtenerLote(procesoData.cli_lote)
             : Promise.resolve(null),
           listarRefinanciamientosDeProceso(idProceso),
+          // Si falla, el historial del cliente actual igual se muestra.
+          listarRefinanciamientosAnterioresDelLote(idProceso).catch(() => []),
         ])
         if (cancelado) return
         setLoteInfo(lote)
         setRefinanciamientos(lista)
+        setAnteriores(listaAnteriores)
       } catch (err) {
         if (cancelado) return
         setError(
@@ -324,10 +331,106 @@ export function HistorialRefinanciamientosContent({ procesoId }: { procesoId: st
                     ))
                   )}
                 </div>
+
+                {anteriores.length > 0 && (
+                  <RefinanciamientosAnteriores
+                    lista={anteriores}
+                    onAbrir={(id) => router.push(`/gestion/refinanciamiento/reporte/${id}`)}
+                  />
+                )}
               </>
             )}
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// Refinanciamientos de los clientes anteriores del lote (antes de que se revendiera) —
+// solo para consulta: se puede abrir el reporte de cada uno, pero no continuarlos ni
+// crear uno nuevo sobre ellos (eso se hace sobre el proceso del cliente actual).
+function RefinanciamientosAnteriores({
+  lista,
+  onAbrir,
+}: {
+  lista: RefinanciamientoAnteriorBackend[]
+  onAbrir: (id: number) => void
+}) {
+  const estado = (refi: RefinanciamientoAnteriorBackend) => (
+    <StatusBadge
+      variant={VARIANTE_ESTADO_REFINANCIAMIENTO[estadoRefinanciamiento(refi.status)]}
+    >
+      {ETIQUETA_ESTADO_REFINANCIAMIENTO[estadoRefinanciamiento(refi.status)]}
+    </StatusBadge>
+  )
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <div className="text-muted-foreground text-xs font-bold tracking-wide">
+          REFINANCIAMIENTOS DE CLIENTES ANTERIORES DE ESTE LOTE
+        </div>
+        <p className="text-muted-foreground mt-1 text-xs">
+          El lote se revendió: estos refinanciamientos pertenecen a sus dueños anteriores y
+          son solo de consulta.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2.5 md:hidden">
+        {lista.map((refi) => (
+          <button
+            key={refi.id}
+            type="button"
+            onClick={() => onAbrir(refi.id)}
+            className="border-border hover:bg-muted/60 flex flex-col gap-2 rounded-lg border p-3.5 text-left transition-colors"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <span className="text-sm font-semibold">{refi.cliente ?? "—"}</span>
+              {estado(refi)}
+            </div>
+            <div className="border-border flex items-end justify-between gap-3 border-t pt-2">
+              <div>
+                <div className="text-muted-foreground text-[10.5px] font-bold tracking-wide">
+                  {refi.financ_type ?? "—"}
+                </div>
+                <div className="font-mono text-sm font-semibold">
+                  {formatearMoneda(refi.total_financ)}
+                </div>
+              </div>
+              <span className="text-muted-foreground font-mono text-xs">
+                {formatearFecha(refi.created_at)}
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <div className="border-border hidden overflow-hidden rounded-lg border md:block">
+        <div className="text-muted-foreground bg-muted/60 border-border grid grid-cols-[1fr_1.8fr_1.2fr_1fr_1fr_40px] border-b px-4.5 py-2.75 text-[11px] font-bold tracking-wide">
+          <span>FECHA</span>
+          <span>CLIENTE</span>
+          <span>TIPO</span>
+          <span>TOTAL A FINANCIAR</span>
+          <span>ESTADO</span>
+          <span />
+        </div>
+        {lista.map((refi, index) => (
+          <div
+            key={refi.id}
+            onClick={() => onAbrir(refi.id)}
+            className={cn(
+              "hover:bg-muted/60 grid cursor-pointer grid-cols-[1fr_1.8fr_1.2fr_1fr_1fr_40px] items-center px-4.5 py-3.5 text-[13px] transition-colors",
+              index < lista.length - 1 && "border-border border-b"
+            )}
+          >
+            <span className="font-mono">{formatearFecha(refi.created_at)}</span>
+            <span className="truncate pr-2 font-semibold">{refi.cliente ?? "—"}</span>
+            <span>{refi.financ_type ?? "—"}</span>
+            <span className="font-mono">{formatearMoneda(refi.total_financ)}</span>
+            <span>{estado(refi)}</span>
+            <span className="text-muted-foreground text-right">⋯</span>
+          </div>
+        ))}
       </div>
     </div>
   )

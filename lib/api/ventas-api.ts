@@ -92,6 +92,11 @@ export type LoteVendido = {
   pvp: string | null
   areaUtil: string | null
   procesoId: number | null
+  // Refinanciamientos del proceso del lote y estado del más reciente (crudo:
+  // "borrador" | "ingresado" | "aprobado" | "rechazado"). Opcionales por compatibilidad
+  // con un backend que todavía no los devuelve.
+  refinanciamientos?: number
+  refinanciamientoEstado?: string | null
 }
 
 // GET /ventas/proyectos/:idProyecto/lotes-vendidos — lotes ya vendidos (estado
@@ -1198,6 +1203,18 @@ export function obtenerRefinanciamientoActivo(idProceso: number | string) {
 export function listarRefinanciamientosDeProceso(idProceso: number | string) {
   return ventasFetch<RefinanciamientoBackend[]>(
     `/procesos/${idProceso}/refinanciamientos`
+  )
+}
+
+// GET /ventas/procesos/:idProceso/refinanciamientos-anteriores — refinanciamientos de
+// los clientes anteriores del mismo lote (lote revendido), con el nombre del cliente.
+export type RefinanciamientoAnteriorBackend = RefinanciamientoBackend & {
+  cliente: string | null
+}
+
+export function listarRefinanciamientosAnterioresDelLote(idProceso: number | string) {
+  return ventasFetch<RefinanciamientoAnteriorBackend[]>(
+    `/procesos/${idProceso}/refinanciamientos-anteriores`
   )
 }
 

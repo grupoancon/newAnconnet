@@ -217,7 +217,10 @@ export function OfertaReporteContent({ id }: { id: string }) {
     ? descuentoTipo +
       (Number(financiamiento.extra_discount) || 0) +
       (Number(financiamiento.promo_discount) || 0)
-    : null
+    : // Venta histórica sin financiamiento: descuento total de la oferta vieja.
+      oferta?.cli_descuento != null
+      ? Number(oferta.cli_descuento) || 0
+      : null
 
   const secciones = useMemo<Array<{ titulo: string; campos: CampoReporte[] }>>(() => {
     if (!oferta) return []
@@ -258,7 +261,7 @@ export function OfertaReporteContent({ id }: { id: string }) {
         {
           campo: "cli_ofrecimiento",
           label: "Ofrecimientos",
-          valor: financiamiento?.ofrecimientos ?? "—",
+          valor: financiamiento?.ofrecimientos ?? oferta.cli_ofrecimiento ?? "—",
         },
         {
           campo: "lugar_venta",
@@ -311,7 +314,9 @@ export function OfertaReporteContent({ id }: { id: string }) {
         },
       ]),
       seccion("Quién efectúa la transacción", [
-        ...(oferta.cli_trabActividad === "OTRO"
+        // Ofertas migradas de la intranet antigua no tienen actividad "OTRO" pero sí
+        // traen los datos de quien efectúa la transacción (el apoderado de la vieja).
+        ...(oferta.cli_trabActividad === "OTRO" || oferta.cli_transNombre
           ? [
               {
                 campo: "cli_transNombre",
@@ -502,6 +507,11 @@ export function OfertaReporteContent({ id }: { id: string }) {
           label: "¿Para qué serán utilizados?",
           valor: licitud?.fondosDestino ?? "—",
         },
+        ...(licitud?.transacciones ?? []).map((transaccion, indice): CampoReporte => ({
+          campo: `transaccion_${indice + 1}`,
+          label: `${indice + 1}) Transacción: monto / tipo / banco / cuenta destino`,
+          valor: `${transaccion.monto != null ? formatearPrecio(transaccion.monto) : "—"} · ${transaccion.tipoTransaccion || "—"} · ${transaccion.institucionFinanciera || "—"} · ${transaccion.cuentaDestino || "—"}`,
+        })),
       ]),
       seccion("Apoderado", [
         {
@@ -832,7 +842,9 @@ export function OfertaReporteContent({ id }: { id: string }) {
                 )}
 
                 <div className="flex flex-col gap-7">
-                  {secciones.map((seccionActual) => (
+                  {secciones
+                    .filter((seccionActual) => seccionActual.campos.length > 0)
+                    .map((seccionActual) => (
                     <div key={seccionActual.titulo}>
                       <div className="border-border mb-3 border-b pb-2 text-[15px] font-extrabold">
                         {seccionActual.titulo}

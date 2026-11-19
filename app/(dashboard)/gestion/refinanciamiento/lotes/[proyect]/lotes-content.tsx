@@ -10,6 +10,11 @@ import { PageHeader } from "@/components/shared/page-header"
 import { Pagination } from "@/components/shared/pagination"
 import { Spinner } from "@/components/shared/spinner"
 import { StatusBadge } from "@/components/shared/status-badge"
+import {
+  ETIQUETA_ESTADO_REFINANCIAMIENTO,
+  VARIANTE_ESTADO_REFINANCIAMIENTO,
+  estadoRefinanciamiento,
+} from "@/lib/refinanciamiento-estado"
 import { cn } from "@/lib/utils"
 import {
   VentasApiError,
@@ -154,6 +159,7 @@ export function LotesVendidosContent() {
                       <span className="font-mono text-sm font-bold">{fila.codigo}</span>
                       <StatusBadge variant="hipotecado">Vendido</StatusBadge>
                     </div>
+                    <MarcaRefinanciamiento fila={fila} />
                     <div className="flex items-center justify-between gap-3 text-[13px]">
                       <span className="text-muted-foreground">
                         {formatearMetraje(fila.areaUtil)}
@@ -173,11 +179,12 @@ export function LotesVendidosContent() {
               </div>
 
               <div className="hidden md:block">
-                <div className="text-muted-foreground bg-muted/60 border-border grid grid-cols-[1fr_1fr_1fr_1fr_auto] border-b px-6.5 py-2.75 text-[11px] font-bold tracking-wide">
+                <div className="text-muted-foreground bg-muted/60 border-border grid grid-cols-[1fr_1fr_1fr_1fr_1.3fr_auto] border-b px-6.5 py-2.75 text-[11px] font-bold tracking-wide">
                   <span>LOTE</span>
                   <span>METRAJE</span>
                   <span>PRECIO</span>
                   <span>ESTADO</span>
+                  <span>REFINANCIAMIENTO</span>
                   <span />
                 </div>
                 {lotesPagina.length === 0 && (
@@ -190,7 +197,7 @@ export function LotesVendidosContent() {
                     onClick={() => abrirLote(fila)}
                     key={fila.id}
                     className={cn(
-                      "hover:bg-muted/60 grid grid-cols-[1fr_1fr_1fr_1fr_auto] items-center px-6.5 py-3.5 text-[13px] transition-colors",
+                      "hover:bg-muted/60 grid grid-cols-[1fr_1fr_1fr_1fr_1.3fr_auto] items-center px-6.5 py-3.5 text-[13px] transition-colors",
                       index < lotesPagina.length - 1 && "border-border border-b"
                     )}
                   >
@@ -201,6 +208,9 @@ export function LotesVendidosContent() {
                     <span className="font-mono">{formatearPrecio(fila.pvp)}</span>
                     <span>
                       <StatusBadge variant="hipotecado">Vendido</StatusBadge>
+                    </span>
+                    <span>
+                      <MarcaRefinanciamiento fila={fila} />
                     </span>
                     <span className="text-right">
                       {fila.procesoId ? (
@@ -234,5 +244,25 @@ export function LotesVendidosContent() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Marca de los lotes que ya tienen refinanciamientos: estado del más reciente y, si hay
+// más de uno, cuántos. Sin refinanciamientos, un texto tenue.
+function MarcaRefinanciamiento({ fila }: { fila: LoteVendido }) {
+  const total = fila.refinanciamientos ?? 0
+  if (total === 0) {
+    return <span className="text-muted-foreground text-xs">Sin refinanciar</span>
+  }
+  const estado = estadoRefinanciamiento(fila.refinanciamientoEstado)
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <StatusBadge variant={VARIANTE_ESTADO_REFINANCIAMIENTO[estado]}>
+        {ETIQUETA_ESTADO_REFINANCIAMIENTO[estado]}
+      </StatusBadge>
+      <span className="text-muted-foreground text-xs whitespace-nowrap">
+        {total === 1 ? "1 refinanciamiento" : `${total} refinanciamientos`}
+      </span>
+    </span>
   )
 }

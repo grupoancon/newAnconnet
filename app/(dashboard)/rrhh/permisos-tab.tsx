@@ -19,6 +19,12 @@ import { SelectField } from "@/components/shared/select-field"
 import { Spinner } from "@/components/shared/spinner"
 import { TIPOS_PERMISO } from "@/components/shared/select-options"
 import { MotivoRechazo } from "@/components/shared/motivo-rechazo"
+import {
+  BarraMisTodas,
+  filtrarPorTexto,
+  type VistaMisTodas,
+} from "@/components/shared/mis-todas"
+import { PiePaginado, usePaginado } from "@/components/shared/paginado"
 import { StatusBadge, type StatusVariant } from "@/components/shared/status-badge"
 import { TimePickerField } from "@/components/shared/time-picker-field"
 import { useToast } from "@/components/shared/toast-provider"
@@ -88,10 +94,21 @@ export function PermisosTab() {
   const toast = useToast()
   const puedeGestionar = useCan("rrhh:gestionar")
 
-  const [solicitudes, setSolicitudes] = useState<SolicitudPermisoConCreador[] | null>(
-    null
-  )
+  const [mias, setMias] = useState<SolicitudPermisoConCreador[] | null>(null)
+  const [todas, setTodas] = useState<SolicitudPermisoConCreador[] | null>(null)
+  const [vista, setVista] = useState<VistaMisTodas>("mias")
+  const [busqueda, setBusqueda] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const verTodas = puedeGestionar && vista === "todas"
+  const cargadas = verTodas ? todas : mias
+  const solicitudes = filtrarPorTexto(cargadas, busqueda, (s) => [
+    s.creador_nombre,
+    s.departmentSoliciter,
+    formatearFecha(s.dateS),
+    s.typePermissions,
+    s.details,
+    s.state,
+  ])
 
   const [edicion, setEdicion] = useState<SolicitudPermisoBackend | null>(null)
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
@@ -109,6 +126,7 @@ export function PermisosTab() {
   const [motivoRechazo, setMotivoRechazo] = useState("")
   const [procesandoRechazo, setProcesandoRechazo] = useState(false)
   const [descargandoId, setDescargandoId] = useState<number | null>(null)
+  const paginado = usePaginado(solicitudes)
 
   // Al abrir "Aprobar" sobre un permiso con cargo a vacaciones, se trae el saldo del
   // solicitante (el id de usuario viaja en `soliciter`) para mostrar con qué cuenta.
@@ -133,17 +151,24 @@ export function PermisosTab() {
 
   function cargar() {
     setError(null)
-    // Quien gestiona revisa las solicitudes de TODOS; el resto, solo las suyas.
-    const carga: Promise<SolicitudPermisoConCreador[]> = puedeGestionar
-      ? listarTodosPermisos()
-      : listarMisPermisos().then((lista) =>
-          lista.map((s) => ({ ...s, creador_nombre: null }))
+    // Todos ven las suyas; quien gestiona además las de TODOS ("Todos los permisos").
+    Promise.all([
+      listarMisPermisos().then((lista) =>
+        lista.map((s) => ({ ...s, creador_nombre: null }))
+      ),
+      puedeGestionar ? listarTodosPermisos() : Promise.resolve(null),
+    ])
+      .then(([propias, todos]) => {
+        setMias(propias)
+        setTodas(todos)
+      })
+      .catch((err) => {
+        setError(
+          err instanceof RrhhApiError
+            ? err.message
+            : "No se pudo conectar con el servidor"
         )
-    carga.then(setSolicitudes).catch((err) => {
-      setError(
-        err instanceof RrhhApiError ? err.message : "No se pudo conectar con el servidor"
-      )
-    })
+      })
   }
 
   useEffect(() => {
@@ -184,7 +209,7 @@ export function PermisosTab() {
     try {
       await descargarReportePermiso(
         fila,
-        await (puedeGestionar
+        await (verTodas
           ? buscarSolicitante(fila.soliciter, fila.creador_nombre).then((datos) => ({
               ...datos,
               nombre: datos.nombre ?? fila.creador_nombre,
@@ -192,11 +217,13 @@ export function PermisosTab() {
           : buscarMiSolicitante()),
         accion
       )
-    } catch {
+    } catch (err) {
+      console.error("Error al generar el reporte", err)
       toast({
         variant: "error",
         title: "No se pudo generar el reporte",
-        description: "Intenta de nuevo.",
+        description:
+          err instanceof Error && err.message ? err.message : "Intenta de nuevo.",
       })
     } finally {
       setDescargandoId(null)
@@ -286,7 +313,29 @@ export function PermisosTab() {
         </Button>
       </div>
 
-      <div className="bg-card border-border overflow-hidden rounded-lg border">
+      <div className="mb-3.5">
+        <BarraMisTodas
+          mostrarTodas={puedeGestionar}
+          vista={verTodas ? "todas" : "mias"}
+          onVista={(valor) => {
+            setVista(valor)
+            paginado.setPagina(1)
+          }}
+          etiquetas={["Mis permisos", "Todos los permisos"]}
+          busqueda={busqueda}
+          onBusqueda={(valor) => {
+            setBusqueda(valor)
+            paginado.setPagina(1)
+          }}
+          placeholder={
+            verTodas
+              ? "Buscar colaborador, tipo o fecha…"
+              : "Buscar tipo, fecha o detalle…"
+          }
+        />
+      </div>
+
+      <div className="bg-card border-border overflow-x-auto rounded-lg border">
         {!solicitudes && !error ? (
           <div className="flex items-center justify-center py-16">
             <Spinner />
@@ -299,21 +348,27 @@ export function PermisosTab() {
               dashed
             />
           </div>
-        ) : solicitudes!.length === 0 ? (
+        ) : cargadas!.length === 0 ? (
           <div className="p-4 sm:p-6.5">
             <EmptyState
-              title="Todavía no tienes solicitudes de permiso"
+              title={
+                verTodas
+                  ? "Todavía no hay solicitudes de permiso"
+                  : "Todavía no tienes solicitudes de permiso"
+              }
               description="Usa el botón «Nueva solicitud» para crear la primera."
             />
+          </div>
+        ) : solicitudes!.length === 0 ? (
+          <div className="text-muted-foreground px-5 py-8 text-center text-sm">
+            Ninguna solicitud coincide con la búsqueda.
           </div>
         ) : (
           <table className="tabla-apilada w-full border-collapse text-sm">
             <thead>
               <tr className="bg-muted/60 text-muted-foreground text-[10.5px] font-bold tracking-wide">
                 <th className="px-5 py-2.75 text-left">ACCIONES</th>
-                {puedeGestionar && (
-                  <th className="px-5 py-2.75 text-left">COLABORADOR</th>
-                )}
+                {verTodas && <th className="px-5 py-2.75 text-left">COLABORADOR</th>}
                 <th className="px-5 py-2.75 text-left">FECHA</th>
                 <th className="px-5 py-2.75 text-left">TIPO</th>
                 <th className="px-5 py-2.75 text-left">HORARIO</th>
@@ -323,12 +378,12 @@ export function PermisosTab() {
               </tr>
             </thead>
             <tbody>
-              {solicitudes!.map((fila, index) => (
+              {paginado.visibles.map((fila, index) => (
                 <tr
                   key={fila.id}
                   className={cn(
                     "hover:bg-muted/60 transition-colors",
-                    index < solicitudes!.length - 1 && "border-border border-b"
+                    index < paginado.visibles.length - 1 && "border-border border-b"
                   )}
                 >
                   <td data-label="Acciones" className="px-5 py-3.5">
@@ -399,12 +454,13 @@ export function PermisosTab() {
                       )}
                     </div>
                   </td>
-                  {puedeGestionar && (
+                  {verTodas && (
                     <td
                       data-label="Colaborador"
                       className="px-5 py-3.5 font-bold whitespace-nowrap"
                     >
                       {fila.creador_nombre ?? "—"}
+                      <MotivoRechazo estado={fila.state} motivo={fila.motivoRechazo} />
                     </td>
                   )}
                   <td
@@ -439,12 +495,18 @@ export function PermisosTab() {
                   </td>
                   <td data-label="Estado" className="px-5 py-3.5">
                     <StatusBadge variant={normalizarEstado(fila.state)} />
-                    <MotivoRechazo estado={fila.state} motivo={fila.motivoRechazo} />
+                    {/* Con la columna Colaborador, el motivo va debajo del nombre. */}
+                    {!verTodas && (
+                      <MotivoRechazo estado={fila.state} motivo={fila.motivoRechazo} />
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        )}
+        {solicitudes && solicitudes.length > 0 && (
+          <PiePaginado {...paginado} etiqueta={["solicitud", "solicitudes"]} />
         )}
       </div>
 
