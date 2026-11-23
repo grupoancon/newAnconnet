@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   BarChart3,
   ChevronRight,
+  ClipboardList,
   Landmark,
   PieChart,
   Settings2,
@@ -24,6 +25,7 @@ import { listarMisReportes } from "@/lib/api/reportes-api"
 import { ReporteAdministrativo } from "./reporte-administrativo"
 import { ReporteDepositos } from "./reporte-depositos"
 import { ReporteDinamico } from "./reporte-dinamico"
+import { ReporteEncuestasApp } from "./reporte-encuestas-app"
 
 type ReporteVisible = { id: string; titulo: string; descripcion: string }
 
@@ -34,12 +36,14 @@ const COMPONENTES: Record<string, React.ComponentType> = {
   ventas: () => <ReporteVentasContent embebido />,
   administrativo: ReporteAdministrativo,
   depositos: ReporteDepositos,
+  "encuestas-app": ReporteEncuestasApp,
 }
 
 const ICONOS: Record<string, LucideIcon> = {
   ventas: TrendingUp,
   administrativo: BarChart3,
   depositos: Landmark,
+  "encuestas-app": ClipboardList,
 }
 
 // Los reportes del constructor se identifican como "d:<slug>" para no chocar con los
@@ -115,11 +119,11 @@ export function ReportesContent({
   if (reporte) {
     return (
       <div className="flex h-full flex-col">
-        <div className="no-print">
+        <div className="no-print print:hidden">
           <DashboardTopbar />
         </div>
 
-        <div className="no-print border-border bg-card flex items-center gap-3 border-b px-6.5 py-4">
+        <div className="no-print border-border bg-card flex items-center gap-3 border-b px-6.5 py-4 print:hidden">
           <Button
             type="button"
             variant="outline"
