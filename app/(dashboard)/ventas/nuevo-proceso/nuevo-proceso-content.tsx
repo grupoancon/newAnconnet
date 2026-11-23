@@ -151,31 +151,19 @@ export function NuevoProcesoContent() {
       setCargando(true)
       setError(null)
       try {
-        // La venta urgente pasa por encima de todo lo demas: si el backend la
-        // reconoce para este lote, se salta validarLoteParaProceso y
-        // buscarOrdenSapPorLote por completo (solo hace falta la info para mostrarla).
+        // Para crear un proceso solo se valida el ESTADO del lote (tiene que estar
+        // Libre; Convenio y los demás bloquean) y que SAP no tenga una orden abierta.
+        // La venta urgente se salta SOLO lo de SAP: el estado del lote se respeta igual
+        // (el backend también lo exige al crear). Entrar por URL directamente también
+        // pasa por aquí, no solo el botón "Crear proceso".
         const ventaUrgente = await consultarVentaUrgente(lote)
         if (cancelado) return
+        const urgente = esVentaUrgente(ventaUrgente)
 
-        if (esVentaUrgente(ventaUrgente)) {
-          const info = await obtenerLote(lote)
-          if (cancelado) return
-          if (!info?.codigo) {
-            setError("Este lote no existe.")
-            return
-          }
-          setLoteInfo(info)
-          return
-        }
-
-        // No es venta urgente: se validan las dos vias de siempre — que el backend lo
-        // marque como valido para un proceso nuevo, y que SAP no tenga ya una orden
-        // abierta para el (entrar por URL directamente tambien debe respetar esto, no
-        // solo el boton "Crear proceso").
         const [info, validacion, orden] = await Promise.all([
           obtenerLote(lote),
           validarLoteParaProceso(lote),
-          buscarOrdenSapPorLote(lote),
+          urgente ? Promise.resolve(null) : buscarOrdenSapPorLote(lote),
         ])
         if (cancelado) return
 
@@ -185,12 +173,13 @@ export function NuevoProcesoContent() {
         // `codigo` — sin esto el formulario se mostraba igual, con todo en "—".
         if (!info?.codigo) {
           problemas.push("Este lote no existe.")
+        } else if (!validacion.valido) {
+          problemas.push(
+            validacion.motivo ?? "Este lote no está libre para crear un proceso de venta."
+          )
         }
-        if (orden.encontrada && !orden.cerrada) {
+        if (orden && orden.encontrada && !orden.cerrada) {
           problemas.push("Este lote ya tiene un proceso en SAP en curso.")
-        }
-        if (!validacion.valido) {
-          problemas.push("Este lote no es válido para crear un proceso de venta.")
         }
         if (problemas.length > 0) {
           setError(problemas.join(" "))

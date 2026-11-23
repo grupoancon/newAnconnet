@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { LogOut } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -12,7 +11,6 @@ import { borrarRespaldosLocales } from "@/lib/borradores/use-borrador-automatico
 // la pantalla de mantenimiento no hay sidebar, y sin esto el usuario no tendría cómo
 // salir para entrar con otra cuenta.
 export function LogoutButton() {
-  const router = useRouter()
   const [saliendo, setSaliendo] = useState(false)
 
   async function cerrarSesion() {
@@ -30,8 +28,10 @@ export function LogoutButton() {
     } catch {
       // seguimos igual
     }
-    router.push("/login")
-    router.refresh()
+    // Navegación completa a clear-session: borra la cookie aunque signOut haya fallado
+    // (API caída). Con router.push("/login") la cookie quedaba y el middleware
+    // rebotaba /login -> / -> /login en loop ("demasiadas redirecciones").
+    window.location.href = "/api/auth/clear-session"
   }
 
   return (

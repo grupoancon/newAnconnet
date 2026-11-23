@@ -126,8 +126,11 @@ export function registrarVentaHistorica(datos: {
 // GET /ventas/procesos/validar/:cliLote — si `valido` es false, el lote no puede pasar
 // a un proceso de venta nuevo (usado como gate en /ventas/nuevo-proceso antes de mostrar
 // el formulario, junto con buscarOrdenSapPorLote en saps-api.ts).
+// GET /ventas/procesos/validar/:cliLote — ¿se puede crear un proceso para este lote?
+// Solo por el estado del lote (tiene que estar Libre y sin facturar; Convenio y demás
+// lo bloquean). `motivo` explica por qué no. La orden SAP se revisa aparte.
 export function validarLoteParaProceso(cliLote: string) {
-  return ventasFetch<{ valido: boolean }>(
+  return ventasFetch<{ valido: boolean; motivo?: string | null }>(
     `/procesos/validar/${encodeURIComponent(cliLote)}`
   )
 }
@@ -300,8 +303,9 @@ export function esVentaUrgente(dato: unknown): boolean {
 }
 
 // --- Módulo "Ventas urgentes" (CRUD, permiso venta:urgente) ---
-// Marca un lote como venta urgente: /ventas/nuevo-proceso se salta la validación de
-// disponibilidad y la orden SAP de ese lote (ver consultarVentaUrgente más arriba).
+// Marca un lote como venta urgente: /ventas/nuevo-proceso se salta la validación de la
+// orden SAP de ese lote (ver consultarVentaUrgente más arriba). El estado del lote se
+// sigue exigiendo: tiene que estar Libre.
 export type VentaUrgenteBackend = {
   id: number
   lote: string

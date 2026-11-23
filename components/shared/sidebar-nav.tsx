@@ -26,7 +26,7 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
-import { usePathname, useRouter } from "@/lib/navigation"
+import { usePathname } from "@/lib/navigation"
 
 import type { Permiso } from "@/components/shared/can"
 import { useSession } from "@/components/shared/session-provider"
@@ -168,6 +168,7 @@ const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Gestión de usuarios", href: "/app/usuarios" },
       { label: "Notificaciones", href: "/app/notificaciones" },
+      { label: "Encuestas", href: "/app/encuestas" },
       { label: "Novedades", href: "/app/novedades" },
       { label: "Videos de ayuda", href: "/app/ayudas" },
       { label: "Sesiones", href: "/app/sesiones" },
@@ -304,7 +305,6 @@ export function SidebarNav() {
   const [busqueda, setBusqueda] = useState("")
   const [gruposAbiertos, setGruposAbiertos] = useState<Set<string>>(new Set())
   const pathname = usePathname()
-  const router = useRouter()
   const usuario = useSession()
   const esEscritorio = useEsEscritorio()
   const { mobileOpen, cerrarMenu } = useSidebarMobile()
@@ -346,7 +346,7 @@ export function SidebarNav() {
   const modoIconoSolo = collapsed && esEscritorio
 
   // Cierra la sesion de Better Auth (fetch al backend, que la revoca y limpia su cookie
-  // via Set-Cookie) y navega a /login con el router del cliente.
+  // via Set-Cookie) y navega a /api/auth/clear-session, que borra la cookie y lleva a /login.
   async function cerrarSesion() {
     // La copia offline del catálogo (ver public/sw.js) es de este usuario — no debe
     // quedar en el dispositivo para el siguiente que inicie sesión.
@@ -363,8 +363,10 @@ export function SidebarNav() {
     } catch {
       // seguimos igual: navegamos a /login de todas formas
     }
-    router.push("/login")
-    router.refresh()
+    // Navegación completa a clear-session: borra la cookie aunque signOut haya fallado
+    // (API caída). Con router.push("/login") la cookie quedaba y el middleware
+    // rebotaba /login -> / -> /login en loop ("demasiadas redirecciones").
+    window.location.href = "/api/auth/clear-session"
   }
 
   function alternarGrupo(label: string) {

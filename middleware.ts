@@ -41,7 +41,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const autenticado = request.cookies.has(BETTER_AUTH_COOKIE_NAME)
 
   if (isPublicPath(pathname)) {
-    if (autenticado) {
+    // /login?salida=1 viene de /api/auth/clear-session: la sesión ya se dio por
+    // inválida. Aunque la cookie siga (si el navegador no la pudo borrar), se muestra el
+    // login en vez de rebotar a / — así nunca se arma el bucle /login -> / -> /login.
+    const vieneDeCerrarSesion = request.nextUrl.searchParams.get("salida") === "1"
+    if (autenticado && !vieneDeCerrarSesion) {
       return NextResponse.redirect(absoluteUrl(request, "/"))
     }
     return NextResponse.next()

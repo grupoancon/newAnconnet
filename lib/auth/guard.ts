@@ -13,7 +13,8 @@ import type { AuthenticatedUser } from "@/types/auth"
 //     ...
 //   }
 //
-// Sin sesion -> /login. Con sesion pero sin el permiso -> /sin-acceso (pantalla de
+// Sin sesion -> /api/auth/clear-session (borra la cookie y lleva a /login; ir directo
+// a /login con la cookie todavia puesta causaba un loop de redirects con el middleware). Con sesion pero sin el permiso -> /sin-acceso (pantalla de
 // "no autorizado" con la seccion nombrada). El rol Administrador pasa siempre y
 // "modulo:all" cubre cualquier accion del modulo (via can()).
 export async function requirePermiso(
@@ -23,7 +24,7 @@ export async function requirePermiso(
   const usuario = await getCurrentUser()
 
   if (!usuario) {
-    redirect("/login")
+    redirect("/api/auth/clear-session")
   }
 
   const [recurso, accion] = permiso.split(":")
@@ -43,7 +44,7 @@ export async function requirePermisoExplicito(
   const usuario = await getCurrentUser()
 
   if (!usuario) {
-    redirect("/login")
+    redirect("/api/auth/clear-session")
   }
 
   const [recurso, accion] = permiso.split(":")
@@ -62,7 +63,7 @@ export async function requireAlgunPermisoExplicito(
   const usuario = await getCurrentUser()
 
   if (!usuario) {
-    redirect("/login")
+    redirect("/api/auth/clear-session")
   }
 
   const autorizado = permisos.some((permiso) => {
@@ -80,7 +81,7 @@ export async function requireAlgunPermisoExplicito(
 export async function requireUsuario(): Promise<AuthenticatedUser> {
   const usuario = await getCurrentUser()
   if (!usuario) {
-    redirect("/login")
+    redirect("/api/auth/clear-session")
   }
   return usuario
 }
@@ -96,7 +97,7 @@ export async function requireAlgunPermiso(
   const usuario = await getCurrentUser()
 
   if (!usuario) {
-    redirect("/login")
+    redirect("/api/auth/clear-session")
   }
 
   const autorizado = permisos.some((permiso) => {
