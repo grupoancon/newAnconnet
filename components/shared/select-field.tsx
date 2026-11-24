@@ -26,6 +26,10 @@ import { EtiquetaCampo } from "@/components/shared/etiqueta-campo"
 // "grupos" es para catalogos con secciones (equivalente a <optgroup>, ej. "¿Cómo nos
 // contactó?" con REDES SOCIALES / REFERIDOS / FERIAS / etc.) — gana sobre
 // "options"/"opciones" si viene.
+// Radix no admite value="" en un SelectItem: la opción vacía usa este marcador y se
+// traduce a "" antes de llegar a onValueChange.
+const VALOR_VACIO = "__vacio__"
+
 export function SelectField({
   label,
   placeholder,
@@ -36,6 +40,7 @@ export function SelectField({
   defaultValue,
   onValueChange,
   className,
+  opcionVacia,
 }: {
   label?: string
   placeholder: string
@@ -46,6 +51,9 @@ export function SelectField({
   defaultValue?: string
   onValueChange?: (value: string) => void
   className?: string
+  // Texto de una primera opción que deja el campo vacío (onValueChange recibe ""),
+  // para campos opcionales. Sin esta prop, una vez elegido no se puede vaciar.
+  opcionVacia?: string
 }) {
   const items: OpcionSelect[] =
     opciones ?? (options ?? []).map((texto) => ({ value: texto, label: texto }))
@@ -57,7 +65,11 @@ export function SelectField({
           <EtiquetaCampo>{label}</EtiquetaCampo>
         </label>
       ) : null}
-      <Select value={value} defaultValue={defaultValue} onValueChange={onValueChange}>
+      <Select
+        value={value}
+        defaultValue={defaultValue}
+        onValueChange={(valor) => onValueChange?.(valor === VALOR_VACIO ? "" : valor)}
+      >
         <SelectTrigger
           className={cn(
             "border-input bg-card focus:border-primary focus:ring-ring/15 h-11! w-full! rounded-md! px-3.5! text-sm focus:ring-3",
@@ -67,6 +79,11 @@ export function SelectField({
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
+          {opcionVacia ? (
+            <SelectItem value={VALOR_VACIO} className="text-muted-foreground">
+              {opcionVacia}
+            </SelectItem>
+          ) : null}
           {grupos
             ? grupos.map((seccion) => (
                 <SelectGroup key={seccion.grupo}>

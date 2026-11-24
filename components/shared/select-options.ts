@@ -93,7 +93,15 @@ export const MEDIOS_CONTACTO_GRUPOS: GrupoOpciones[] = [
   { grupo: "STAND", opciones: ["RECREO", "QUICENTRO SUR", "STAND OTROS"] },
   {
     grupo: "OTROS",
-    opciones: ["CLIENTE ANTIGUO", "LLAMADA OFICINA", "FUNCIONARIO DE LA EMPRESA"],
+    opciones: [
+      "CLIENTE ANTIGUO",
+      "LLAMADA OFICINA",
+      "FUNCIONARIO DE LA EMPRESA",
+      "CONTACTO PERSONAL",
+      "CANJE",
+      "VOLANTEO PROYECTO",
+      "VOLANTEO OFICINA",
+    ],
   },
 ]
 
