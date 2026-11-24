@@ -59,7 +59,19 @@ function normalizar(texto: string): string {
   return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
 }
 
-export function ReporteEncuestaAppContent({ id }: { id: number }) {
+// `embebido`: dentro de la página /reportes (reporte "Encuestas de la app", permiso
+// reportes:encuestas-app) — sin barra superior ni enlace a App → Encuestas, que esa
+// persona puede no tener; cambiar de encuesta avisa a `onCambiarEncuesta` en vez de
+// navegar.
+export function ReporteEncuestaAppContent({
+  id,
+  embebido = false,
+  onCambiarEncuesta,
+}: {
+  id: number
+  embebido?: boolean
+  onCambiarEncuesta?: (id: number) => void
+}) {
   const router = useRouter()
   const [resultados, setResultados] = useState<ResultadosEncuesta | null>(null)
   const [encuestas, setEncuestas] = useState<EncuestaResumen[]>([])
@@ -101,9 +113,11 @@ export function ReporteEncuestaAppContent({ id }: { id: number }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="no-print print:hidden">
-        <DashboardTopbar />
-      </div>
+      {embebido ? null : (
+        <div className="no-print print:hidden">
+          <DashboardTopbar />
+        </div>
+      )}
 
       {/* En la impresión solo va la versión de abajo (VersionImpresion): título, los 4
           indicadores, el resumen de TODAS las preguntas y las respuestas por persona.
@@ -114,13 +128,15 @@ export function ReporteEncuestaAppContent({ id }: { id: number }) {
         <div className="print:hidden [.modo-pdf_&]:hidden">
           <div className="mb-4.5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
-              <Link
-                href="/app/encuestas"
-                className="no-print text-muted-foreground hover:text-primary mb-2 inline-flex items-center gap-1 text-xs font-semibold"
-              >
-                <ArrowLeft className="size-3.5" strokeWidth={1.8} />
-                Encuestas de la app
-              </Link>
+              {embebido ? null : (
+                <Link
+                  href="/app/encuestas"
+                  className="no-print text-muted-foreground hover:text-primary mb-2 inline-flex items-center gap-1 text-xs font-semibold"
+                >
+                  <ArrowLeft className="size-3.5" strokeWidth={1.8} />
+                  Encuestas de la app
+                </Link>
+              )}
               <p className="text-muted-foreground text-[11px] font-bold tracking-wide uppercase">
                 Reporte de encuesta
               </p>
@@ -155,7 +171,11 @@ export function ReporteEncuestaAppContent({ id }: { id: number }) {
                         : e.titulo,
                     }))}
                     value={String(id)}
-                    onValueChange={(v) => router.push(`/app/encuestas/${v}/reporte`)}
+                    onValueChange={(v) =>
+                      onCambiarEncuesta
+                        ? onCambiarEncuesta(Number(v))
+                        : router.push(`/app/encuestas/${v}/reporte`)
+                    }
                   />
                 </div>
               ) : null}

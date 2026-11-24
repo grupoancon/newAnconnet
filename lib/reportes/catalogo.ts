@@ -43,6 +43,15 @@ export const REPORTES: ReporteDefinicion[] = [
     descripcion: "Depósitos registrados por estado, cliente, lote y monto.",
     permiso: "reportes:depositos",
   },
+  {
+    // Solo lectura de App → Encuestas (resultados por encuesta). El backend
+    // (/app-encuestas, listado y resultados) acepta este permiso o app:encuestas.
+    // Permiso: prisma/sql/permiso_reportes_encuestas_app.sql.
+    id: "encuestas-app",
+    titulo: "Encuestas de la app",
+    descripcion: "Resultados de las encuestas que responden los clientes en la app.",
+    permiso: "reportes:encuestas-app",
+  },
 ]
 
 export const PERMISOS_REPORTES = REPORTES.map((reporte) => reporte.permiso)
