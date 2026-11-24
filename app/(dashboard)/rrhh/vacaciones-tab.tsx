@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Download,
+  Eye,
   Hourglass,
   Palmtree,
   Plus,
@@ -62,6 +63,7 @@ import {
   buscarMiSolicitante,
   buscarSolicitante,
   descargarReporteVacaciones,
+  diasVacacion,
 } from "@/lib/rrhh-reportes-pdf"
 import { cn } from "@/lib/utils"
 
@@ -110,6 +112,35 @@ function normalizarEstado(crudo: string | null | undefined): StatusVariant {
   const clave = (crudo ?? "").trim().toLowerCase()
   if (clave === "aprobado" || clave === "rechazado") return clave
   return "pendiente"
+}
+
+// "no_aplica" (vacación que no se toma: colectiva excluida, o pendiente de la intranet
+// antigua migrada sin resolver) es un estado cerrado: se muestra como "No aplica" y no
+// como "Pendiente", que haría pensar que falta aprobarla o rechazarla.
+function BadgeEstado({ estado }: { estado: string | null | undefined }) {
+  if ((estado ?? "").trim().toLowerCase() === "no_aplica") {
+    return <StatusBadge variant="pronto">No aplica</StatusBadge>
+  }
+  return <StatusBadge variant={normalizarEstado(estado)} />
+}
+
+// RRHH aprueba o rechaza las pendientes y también las individuales en "no_aplica"
+// (mismo criterio que VacacionesService.esResolvible del backend). Las colectivas en
+// "no_aplica" se reincorporan con su interruptor "Aplica", no desde acá.
+function sePuedeResolver(solicitud: SolicitudVacacionBackend): boolean {
+  const estado = (solicitud.state ?? "").trim().toLowerCase()
+  return estado === "pendiente" || (estado === "no_aplica" && !solicitud.colectiva)
+}
+
+function DatoDetalle({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-muted-foreground text-[11px] font-bold tracking-wide uppercase">
+        {etiqueta}
+      </dt>
+      <dd className="mt-0.5 text-sm font-semibold whitespace-pre-line">{valor || "—"}</dd>
+    </div>
+  )
 }
 
 // La solicitud propia que todavía "cuenta" — pendiente de revisión, o aprobada y
@@ -169,6 +200,9 @@ export function VacacionesTab() {
   const [motivoRechazo, setMotivoRechazo] = useState("")
   const [procesandoRechazo, setProcesandoRechazo] = useState(false)
   const [descargandoId, setDescargandoId] = useState<number | null>(null)
+  const [viendoDetalle, setViendoDetalle] = useState<SolicitudVacacionConCreador | null>(
+    null
+  )
 
   // --- Vacaciones de diciembre (asignación colectiva, solo rrhh:gestionar) ---
   const [fechaDiciembre, setFechaDiciembre] = useState("")
@@ -919,10 +953,10 @@ export function VacacionesTab() {
                       {formatearFecha(solicitud.dateE)}
                     </td>
                     <td data-label="Días" className="px-5 py-3.5 font-mono font-semibold">
-                      {solicitud.approvedDays ?? solicitud.requestedDays ?? "—"}
+                      {diasVacacion(solicitud) ?? "—"}
                     </td>
                     <td data-label="Estado" className="px-5 py-3.5">
-                      <StatusBadge variant={normalizarEstado(solicitud.state)} />
+                      <BadgeEstado estado={solicitud.state} />
                       <MotivoRechazo
                         estado={solicitud.state}
                         motivo={solicitud.observation}
@@ -1005,7 +1039,16 @@ export function VacacionesTab() {
                     )}
                   >
                     <td data-label="Acciones" className="px-5 py-3.5">
-                      {normalizarEstado(solicitud.state) === "aprobado" && (
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          type="button"
+                          aria-label="Ver detalle"
+                          title="Ver detalle"
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => setViendoDetalle(solicitud)}
+                        >
+                          <Eye className="size-4" strokeWidth={1.7} />
+                        </button>
                         <button
                           type="button"
                           aria-label="Descargar reporte"
@@ -1016,27 +1059,29 @@ export function VacacionesTab() {
                         >
                           <Download className="size-4" strokeWidth={1.7} />
                         </button>
-                      )}
-                      {solicitud.state === "pendiente" && (
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            aria-label="Aprobar"
-                            className="text-status-disponible-fg"
-                            onClick={() => setAprobando(solicitud)}
-                          >
-                            <CheckCircle2 className="size-4" strokeWidth={1.7} />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Rechazar"
-                            className="text-status-bloqueado-fg"
-                            onClick={() => setRechazando(solicitud)}
-                          >
-                            <XCircle className="size-4" strokeWidth={1.7} />
-                          </button>
-                        </div>
-                      )}
+                        {sePuedeResolver(solicitud) && (
+                          <>
+                            <button
+                              type="button"
+                              aria-label="Aprobar"
+                              title="Aprobar"
+                              className="text-status-disponible-fg"
+                              onClick={() => setAprobando(solicitud)}
+                            >
+                              <CheckCircle2 className="size-4" strokeWidth={1.7} />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Rechazar"
+                              title="Rechazar"
+                              className="text-status-bloqueado-fg"
+                              onClick={() => setRechazando(solicitud)}
+                            >
+                              <XCircle className="size-4" strokeWidth={1.7} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                     <td
                       data-label="Colaborador"
@@ -1055,7 +1100,7 @@ export function VacacionesTab() {
                       {solicitud.requestedDays ?? "—"}
                     </td>
                     <td data-label="Estado" className="px-5 py-3.5">
-                      <StatusBadge variant={normalizarEstado(solicitud.state)} />
+                      <BadgeEstado estado={solicitud.state} />
                     </td>
                   </tr>
                 ))}
@@ -1175,6 +1220,98 @@ export function VacacionesTab() {
               {procesandoRechazo ? "Rechazando…" : "Rechazar"}
             </Button>
           </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet
+        open={!!viendoDetalle}
+        onOpenChange={(valor) => {
+          if (!valor) setViendoDetalle(null)
+        }}
+      >
+        <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-md">
+          {viendoDetalle && (
+            <>
+              <SheetHeader className="border-border border-b p-5">
+                <SheetTitle>Solicitud de vacaciones N.º {viendoDetalle.id}</SheetTitle>
+                <SheetDescription>{viendoDetalle.creador_nombre ?? "—"}</SheetDescription>
+              </SheetHeader>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-4 p-5">
+                <div className="col-span-2">
+                  <dt className="text-muted-foreground text-[11px] font-bold tracking-wide uppercase">
+                    Estado
+                  </dt>
+                  <dd className="mt-1">
+                    <BadgeEstado estado={viendoDetalle.state} />
+                  </dd>
+                </div>
+                <DatoDetalle etiqueta="Desde" valor={formatearFecha(viendoDetalle.dateS)} />
+                <DatoDetalle etiqueta="Hasta" valor={formatearFecha(viendoDetalle.dateE)} />
+                <DatoDetalle etiqueta="Días solicitados" valor={viendoDetalle.requestedDays} />
+                <DatoDetalle
+                  etiqueta="Días aprobados"
+                  valor={
+                    normalizarEstado(viendoDetalle.state) === "aprobado"
+                      ? diasVacacion(viendoDetalle)
+                      : null
+                  }
+                />
+                <DatoDetalle etiqueta="Periodo" valor={viendoDetalle.holidaysPeriod} />
+                <DatoDetalle
+                  etiqueta="Departamento"
+                  valor={viendoDetalle.departmentSoliciter}
+                />
+                <DatoDetalle
+                  etiqueta="Fecha de solicitud"
+                  valor={formatearFecha(viendoDetalle.created_at)}
+                />
+                <DatoDetalle
+                  etiqueta="Fecha de revisión"
+                  valor={formatearFecha(viendoDetalle.aprovedDate)}
+                />
+                <div className="col-span-2">
+                  <DatoDetalle etiqueta="Detalle" valor={viendoDetalle.details} />
+                </div>
+                <div className="col-span-2">
+                  <DatoDetalle etiqueta="Observación" valor={viendoDetalle.observation} />
+                </div>
+              </dl>
+              <SheetFooter className="border-border border-t p-5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={descargandoId === viendoDetalle.id}
+                  onClick={() => manejarDescargar(viendoDetalle, false)}
+                >
+                  <Download className="size-4" strokeWidth={1.7} />
+                  Descargar reporte
+                </Button>
+                {sePuedeResolver(viendoDetalle) && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => {
+                        setRechazando(viendoDetalle)
+                        setViendoDetalle(null)
+                      }}
+                    >
+                      Rechazar
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setAprobando(viendoDetalle)
+                        setViendoDetalle(null)
+                      }}
+                    >
+                      Aprobar
+                    </Button>
+                  </>
+                )}
+              </SheetFooter>
+            </>
+          )}
         </SheetContent>
       </Sheet>
     </div>

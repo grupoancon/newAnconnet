@@ -285,25 +285,56 @@ function insignia(
   y: number,
   ancho: number,
   alto: number,
-  etiqueta: string
+  etiqueta: string,
+  tono: TonoInsignia = "aprobado"
 ) {
   const { doc } = pdf
-  doc.setFillColor(...COLOR.verdeFondo)
-  doc.setDrawColor(...COLOR.verde)
+  const { color, fondo } = TONOS_INSIGNIA[tono]
+  doc.setFillColor(...fondo)
+  doc.setDrawColor(...color)
   doc.setLineWidth(1.6 * K)
   doc.roundedRect(x * K, y * K, ancho * K, alto * K, 4 * K, 4 * K, "FD")
 
-  // check dibujado a mano — Helvetica no trae el glifo ✔.
+  // El check (dibujado a mano — Helvetica no trae el glifo ✔) solo va en "aprobado".
   const cx = x + 12
   const cy = y + alto / 2
-  linea(pdf, cx, cy, cx + 3.5, cy + 4, COLOR.verde, 1.8)
-  linea(pdf, cx + 3.5, cy + 4, cx + 10, cy - 4, COLOR.verde, 1.8)
+  if (tono === "aprobado") {
+    linea(pdf, cx, cy, cx + 3.5, cy + 4, color, 1.8)
+    linea(pdf, cx + 3.5, cy + 4, cx + 10, cy - 4, color, 1.8)
+  }
 
-  texto(pdf, etiqueta, x + 26, y + alto / 2 + 0.5, {
+  texto(pdf, etiqueta, tono === "aprobado" ? x + 26 : x + ancho / 2, y + alto / 2 + 0.5, {
     tamano: alto * 0.46,
     negrita: true,
-    color: COLOR.verde,
+    color,
+    alinear: tono === "aprobado" ? "left" : "center",
   })
+}
+
+// Días de la solicitud: los aprobados, o los solicitados si no hay aprobados. Un 0 en
+// approvedDays cuenta como "sin dato" (así vienen las migradas de la intranet antigua).
+export function diasVacacion(solicitud: {
+  approvedDays: number | null
+  requestedDays: number | null
+}): number | null {
+  return solicitud.approvedDays || solicitud.requestedDays || null
+}
+
+type TonoInsignia = "aprobado" | "pendiente" | "rechazado"
+
+const TONOS_INSIGNIA: Record<TonoInsignia, { color: Rgb; fondo: Rgb }> = {
+  aprobado: { color: COLOR.verde, fondo: COLOR.verdeFondo },
+  pendiente: { color: [180, 83, 9], fondo: [255, 251, 235] },
+  rechazado: { color: COLOR.rojo, fondo: [254, 242, 242] },
+}
+
+// Estado que se imprime en el reporte de vacaciones. "no_aplica" (pendientes de la
+// intranet antigua migradas sin resolver) y cualquier otro estado abierto salen como
+// PENDIENTE: solo una solicitud aprobada lleva APROBADO.
+function tonoVacacion(estado: string | null | undefined): TonoInsignia {
+  const clave = (estado ?? "").trim().toLowerCase()
+  if (clave === "aprobado" || clave === "rechazado") return clave
+  return "pendiente"
 }
 
 function pie(pdf: Pdf) {
@@ -688,7 +719,7 @@ export async function descargarReporteVacaciones(
     12
   )
 
-  const dias = solicitud.approvedDays ?? solicitud.requestedDays
+  const dias = diasVacacion(solicitud)
   const etiquetaDias = "DIAS SOLICITADOS: "
   const valorDias = String(dias ?? "—")
   const inicioDias =
@@ -727,13 +758,15 @@ export async function descargarReporteVacaciones(
 
   const yEstado = Math.max(768, yFin + 40)
   texto(pdf, "ESTADO DE SU SOLICITUD:", 76, yEstado, { tamano: 12, negrita: true })
+  const tono = tonoVacacion(solicitud.state)
   insignia(
     pdf,
     76 + anchoTexto(pdf, "ESTADO DE SU SOLICITUD:", 12, true) + 12,
     yEstado - 14,
     111,
     28,
-    "APROBADO"
+    tono.toUpperCase(),
+    tono
   )
 
   pdf.doc.setDrawColor(...COLOR.borde)
@@ -742,10 +775,12 @@ export async function descargarReporteVacaciones(
 
   const fechaSolicitud = fechaHoraFirma(solicitud.created_at)
   const fechaAprobacion = fechaHoraFirma(solicitud.aprovedDate) || fechaSolicitud
+  // Sin aprobar, jefe y RRHH todavía no firmaron: esas fechas quedan en blanco.
+  const fechaRevision = tono === "aprobado" ? fechaAprobacion : ""
   firmasTres(pdf, 962, [
     { x1: 68, x2: 265, etiqueta: "FIRMA SOLICITANTE", fecha: fechaSolicitud },
-    { x1: 312, x2: 491, etiqueta: "JEFE INMEDIATO", fecha: fechaAprobacion },
-    { x1: 541, x2: 757, etiqueta: "RECURSOS HUMANOS", fecha: fechaAprobacion },
+    { x1: 312, x2: 491, etiqueta: "JEFE INMEDIATO", fecha: fechaRevision },
+    { x1: 541, x2: 757, etiqueta: "RECURSOS HUMANOS", fecha: fechaRevision },
   ])
 
   pie(pdf)
