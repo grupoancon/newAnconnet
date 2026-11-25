@@ -113,6 +113,7 @@ export const MEDIOS_CONTACTO: { grupo: string | null; opciones: OpcionEncuesta[]
       { value: "VOLANTEO PROYECTO", label: "Volanteo proyecto" },
       { value: "CONTACTO PERSONAL", label: "Contacto personal" },
       { value: "CANJE", label: "Canje" },
+      { value: "VOLANTEO OFICINA", label: "Volanteo oficina" },
     ],
   },
 ]

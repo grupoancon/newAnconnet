@@ -49,6 +49,21 @@ function formatearLugarVenta(location: string | null): string {
 
 type VistaReporte = "completadas" | "falta-documentos"
 
+const MESES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+]
+
 // Vista agregada de TODA la empresa (a diferencia de "Mis ventas", que solo muestra las
 // del asesor logueado) — el backend no filtra por ningún asesor salvo que se pida acá.
 // `embebido`: se muestra dentro de la página /reportes, que ya trae su propio topbar.
@@ -59,6 +74,8 @@ export function ReporteVentasContent({ embebido = false }: { embebido?: boolean 
   const [hasta, setHasta] = useState("")
   const [vista, setVista] = useState<VistaReporte>("completadas")
   const [asesor, setAsesor] = useState("")
+  const [anio, setAnio] = useState("")
+  const [mes, setMes] = useState("")
 
   const [procesos, setProcesos] = useState<MiVenta[]>([])
   const [cargando, setCargando] = useState(true)
@@ -99,31 +116,57 @@ export function ReporteVentasContent({ embebido = false }: { embebido?: boolean 
     cargar()
   }, [cargar])
 
-  const hayFiltros = Boolean(asesor || proyectoId || desde || hasta)
+  const hayFiltros = Boolean(asesor || proyectoId || desde || hasta || anio || mes)
   function limpiarFiltros() {
     setAsesor("")
     setProyectoId("")
     setDesde("")
     setHasta("")
+    setAnio("")
+    setMes("")
   }
+
+  // Años con ventas (por la fecha que muestra la tabla), del más reciente al más
+  // antiguo, para el selector de año.
+  const anios = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          procesos.map((p) => (p.ventaNuevaAt ?? "").slice(0, 4)).filter(Boolean)
+        )
+      ).sort((a, b) => b.localeCompare(a)),
+    [procesos]
+  )
+
+  // Año y mes se filtran en el cliente, sobre la misma fecha de la columna "Fecha".
+  const procesosPeriodo = useMemo(
+    () =>
+      procesos.filter((p) => {
+        const fecha = p.ventaNuevaAt ?? ""
+        if (anio && fecha.slice(0, 4) !== anio) return false
+        if (mes && fecha.slice(5, 7) !== mes) return false
+        return true
+      }),
+    [procesos, anio, mes]
+  )
 
   // KPI "Ventas completadas + documentos": a diferencia de la tabla (que en la vista
   // "Completadas" muestra toda venta aprobada, tenga o no documentos pendientes), este
   // número solo cuenta las que además tienen los documentos 100% completos.
   const totalCompletadasConDocumentos = useMemo(
     () =>
-      procesos.filter(
+      procesosPeriodo.filter(
         (p) => p.estadoGeneral === "aprobado" && p.documentosPendientes === 0
       ).length,
-    [procesos]
+    [procesosPeriodo]
   )
 
   const procesosVista = useMemo(
     () =>
       vista === "completadas"
-        ? procesos.filter((p) => p.estadoGeneral === "aprobado")
-        : procesos.filter((p) => p.documentosPendientes > 0),
-    [procesos, vista]
+        ? procesosPeriodo.filter((p) => p.estadoGeneral === "aprobado")
+        : procesosPeriodo.filter((p) => p.documentosPendientes > 0),
+    [procesosPeriodo, vista]
   )
 
   // Agrupa los lotes por proyecto (juntos en vez de intercalados por fecha) para poder
@@ -229,6 +272,39 @@ export function ReporteVentasContent({ embebido = false }: { embebido?: boolean 
             className="border-input bg-card focus:border-primary focus:ring-ring/15 h-9 rounded-md border px-3 text-sm outline-none focus:ring-3"
           />
 
+          <Select
+            value={anio || "todos"}
+            onValueChange={(v) => setAnio(v === "todos" ? "" : v)}
+          >
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Año" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los años</SelectItem>
+              {anios.map((a) => (
+                <SelectItem key={a} value={a}>
+                  {a}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={mes || "todos"}
+            onValueChange={(v) => setMes(v === "todos" ? "" : v)}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Mes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los meses</SelectItem>
+              {MESES.map((nombre, i) => (
+                <SelectItem key={nombre} value={String(i + 1).padStart(2, "0")}>
+                  {nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <div className="flex gap-1.5">
             <Button
               type="button"
@@ -268,7 +344,7 @@ export function ReporteVentasContent({ embebido = false }: { embebido?: boolean 
         ) : procesosVista.length === 0 ? (
           <EmptyState
             title="No hay ventas con estos filtros"
-            description="Probá cambiando el proyecto, el asesor, el rango de fechas o la vista."
+            description="Probá cambiando el proyecto, el asesor, las fechas, el año, el mes o la vista."
           />
         ) : (
           <div className="border-border bg-card overflow-x-auto rounded-lg border print:rounded-none! print:border-0!">

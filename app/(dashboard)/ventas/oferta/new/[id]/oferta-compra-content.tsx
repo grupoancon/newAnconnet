@@ -1490,7 +1490,9 @@ export function OfertaCompraContent({ id }: { id: string }) {
         cli_asesorTelf: conTelefono(form.cli_asesorTelf_prefijo, form.cli_asesorTelf),
         cli_contac: form.cli_contac || undefined,
         cli_contacNombre: form.cli_contacNombre || undefined,
-        prospectador: form.prospectador || undefined,
+        // null (no undefined): al editar, el backend ignora los undefined y dejaría el
+        // prospectador anterior; con null se guarda vacío.
+        prospectador: form.prospectador || null,
         cli_motivoCompra: form.cli_motivoCompra || undefined,
         cli_asistenciaProyecto: form.cli_asistenciaProyecto || undefined,
         cli_visitaProyecto: form.cli_visitaProyecto || undefined,
@@ -2710,6 +2712,7 @@ export function OfertaCompraContent({ id }: { id: string }) {
                         label="Prospectador"
                         placeholder="Seleccione prospectador"
                         options={PROSPECTADORES}
+                        opcionVacia="Sin prospectador"
                         value={form.prospectador}
                         onValueChange={(valor) => actualizarCampo("prospectador", valor)}
                       />

@@ -97,7 +97,10 @@ export const MEDIOS_CONTACTO_GRUPOS: GrupoOpciones[] = [
       "CLIENTE ANTIGUO",
       "LLAMADA OFICINA",
       "FUNCIONARIO DE LA EMPRESA",
+      "CONTACTO PERSONAL",
+      "CANJE",
       "VOLANTEO PROYECTO",
+      "VOLANTEO OFICINA",
     ],
   },
 ]

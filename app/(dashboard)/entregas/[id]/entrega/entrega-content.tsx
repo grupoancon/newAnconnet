@@ -401,11 +401,12 @@ export function EntregaContent({ id }: { id: number }) {
                   <label className="text-muted-foreground mb-1.5 block text-xs font-semibold">
                     Foto de la entrega <span className="text-destructive">*</span>
                   </label>
+                  {/* Sin `capture`: con él el celular abre directo la cámara y no deja
+                      elegir de la galería. Así muestra su menú (cámara, galería, archivos). */}
                   <input
                     ref={inputFoto}
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     className="hidden"
                     onChange={(e) => {
                       elegirFoto(e.target.files?.[0])
