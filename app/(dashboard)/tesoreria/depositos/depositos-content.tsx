@@ -28,7 +28,6 @@ import {
   listarDepositos,
   type DepositoBackend,
   type DepositoResumen,
-  type LoteRelacionado,
 } from "@/lib/api/depositos-api"
 import { cn } from "@/lib/utils"
 
@@ -44,8 +43,9 @@ import {
   type EstadoDeposito,
 } from "./depositos-utils"
 import { DevolverLoteSheet } from "./devolver-lote-sheet"
-import { RegistrarLoteSheet } from "./registrar-lote-sheet"
+import { RegistrarLoteSheet, type LoteSeleccionado } from "./registrar-lote-sheet"
 import { ResumenSheet } from "./resumen-sheet"
+import { CorregirPagoSheet } from "./corregir-pago-sheet"
 import { useDepositosSocket } from "./use-depositos-socket"
 
 // Ruta -> nombre legible para la lista de presencia. Lo que no conozca se muestra tal
@@ -108,9 +108,12 @@ export function DepositosContent() {
 
   const [detalle, setDetalle] = useState<DepositoBackend | null>(null)
   const [resumen, setResumen] = useState<DepositoResumen | null>(null)
-  const [paraRegistrar, setParaRegistrar] = useState<LoteRelacionado | null>(null)
-  const [paraDevolver, setParaDevolver] = useState<LoteRelacionado | null>(null)
-  const [paraCambiarEstado, setParaCambiarEstado] = useState<LoteRelacionado | null>(null)
+  const [paraRegistrar, setParaRegistrar] = useState<LoteSeleccionado | null>(null)
+  const [paraDevolver, setParaDevolver] = useState<LoteSeleccionado | null>(null)
+  const [paraCambiarEstado, setParaCambiarEstado] = useState<LoteSeleccionado | null>(
+    null
+  )
+  const [paraCorregir, setParaCorregir] = useState<DepositoBackend | null>(null)
 
   const cargar = useCallback(async () => {
     try {
@@ -202,6 +205,7 @@ export function DepositosContent() {
     setParaRegistrar(null)
     setParaDevolver(null)
     setParaCambiarEstado(null)
+    setParaCorregir(null)
     await cargar()
   }
 
@@ -440,6 +444,7 @@ export function DepositosContent() {
                 onAprobar={setParaRegistrar}
                 onDevolver={setParaDevolver}
                 onCambiarEstado={setParaCambiarEstado}
+                onCorregir={setParaCorregir}
               />
             ))}
           </div>
@@ -457,6 +462,11 @@ export function DepositosContent() {
         lote={paraDevolver}
         onCerrar={() => setParaDevolver(null)}
         onDevuelto={recargarTrasAccion}
+      />
+      <CorregirPagoSheet
+        deposito={paraCorregir}
+        onCerrar={() => setParaCorregir(null)}
+        onCorregido={recargarTrasAccion}
       />
       <CambiarEstadoSheet
         lote={paraCambiarEstado}

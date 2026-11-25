@@ -159,3 +159,20 @@ export function lotesSoloEnResumen(deposito: DepositoBackend): string[] {
   }
   return extras
 }
+
+// Reparte el monto pagado entre los lotes del resumen. `montos[fijo]` es el valor que
+// se acaba de digitar y se respeta; la diferencia para que la suma dé `total` se
+// descuenta (o suma) a los demás lotes, empezando por el último y sin bajar de 0. Si ni
+// dejando los demás en 0 alcanza, la suma queda distinta y la pantalla lo avisa.
+export function repartirMontos(montos: number[], total: number, fijo?: number): number[] {
+  const resultado = [...montos]
+  let diferencia = Math.round((total - montos.reduce((a, b) => a + b, 0)) * 100)
+  for (let i = resultado.length - 1; i >= 0 && diferencia !== 0; i--) {
+    if (i === fijo) continue
+    const centavos = Math.round(resultado[i] * 100)
+    const nuevo = Math.max(0, centavos + diferencia)
+    diferencia -= nuevo - centavos
+    resultado[i] = nuevo / 100
+  }
+  return resultado
+}

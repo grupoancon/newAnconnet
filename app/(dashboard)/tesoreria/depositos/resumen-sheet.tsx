@@ -63,7 +63,15 @@ export function ResumenSheet({
         <SheetHeader className="border-border border-b p-5">
           <SheetTitle>Resumen</SheetTitle>
           <SheetDescription>
-            Cálculo del pago tal como lo armó el cliente en la aplicación.
+            {resumen?.ajustadoEn
+              ? `Cálculo del pago corregido por tesorería el ${new Date(
+                  resumen.ajustadoEn
+                ).toLocaleDateString("es-ES", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}.`
+              : "Cálculo del pago tal como lo armó el cliente en la aplicación."}
           </SheetDescription>
         </SheetHeader>
 

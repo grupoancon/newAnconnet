@@ -16,7 +16,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { DepositosApiError, devolverDeposito } from "@/lib/api/depositos-api"
 
-import type { LoteSeleccionado } from "./registrar-lote-sheet"
+import { textoLotes, type LoteSeleccionado } from "./registrar-lote-sheet"
 
 export function DevolverLoteSheet({
   lote,
@@ -67,7 +67,7 @@ export function DevolverLoteSheet({
         {lote && (
           <div className="flex flex-col gap-4 p-5">
             <div className="bg-muted rounded-lg p-4">
-              <p className="font-bold">Lote: {lote.lote}</p>
+              <p className="font-bold">{textoLotes(lote)}</p>
             </div>
 
             <div>

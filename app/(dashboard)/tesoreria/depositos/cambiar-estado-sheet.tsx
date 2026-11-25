@@ -16,7 +16,7 @@ import {
 import { DepositosApiError, cambiarEstadoDeposito } from "@/lib/api/depositos-api"
 
 import { codigoReciboValido, formatearCodigoRecibo } from "./depositos-utils"
-import type { LoteSeleccionado } from "./registrar-lote-sheet"
+import { textoLotes, type LoteSeleccionado } from "./registrar-lote-sheet"
 
 // Aprueba un lote que estaba devuelto asociándolo al recibo (REC-YYYYMMDD-XXXX) de otro
 // depósito del mismo lote que ya fue aprobado. El backend valida que el recibo exista,
@@ -76,7 +76,7 @@ export function CambiarEstadoSheet({
         {lote && (
           <div className="flex flex-col gap-4 p-5">
             <div className="bg-muted rounded-lg p-4">
-              <p className="font-bold">Lote: {lote.lote}</p>
+              <p className="font-bold">{textoLotes(lote)}</p>
             </div>
 
             <TextField

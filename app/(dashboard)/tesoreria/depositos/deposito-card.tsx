@@ -7,6 +7,7 @@ import {
   FileText,
   Info,
   MapPin,
+  PencilLine,
   RefreshCw,
   XCircle,
 } from "lucide-react"
@@ -14,6 +15,8 @@ import {
 import { StatusBadge, type StatusVariant } from "@/components/shared/status-badge"
 import { Button } from "@/components/ui/button"
 import type { DepositoBackend, LoteRelacionado } from "@/lib/api/depositos-api"
+
+import type { LoteSeleccionado } from "./registrar-lote-sheet"
 
 import {
   calcularEstadoDeposito,
@@ -75,14 +78,16 @@ export function DepositoCard({
   onAprobar,
   onDevolver,
   onCambiarEstado,
+  onCorregir,
 }: {
   deposito: DepositoBackend
   puedeGestionar: boolean
   onVerComprobantes: (deposito: DepositoBackend) => void
   onVerResumen: (deposito: DepositoBackend) => void
-  onAprobar: (lote: LoteRelacionado) => void
-  onDevolver: (lote: LoteRelacionado) => void
-  onCambiarEstado: (lote: LoteRelacionado) => void
+  onAprobar: (lote: LoteSeleccionado) => void
+  onDevolver: (lote: LoteSeleccionado) => void
+  onCambiarEstado: (lote: LoteSeleccionado) => void
+  onCorregir: (deposito: DepositoBackend) => void
 }) {
   const estado = calcularEstadoDeposito(deposito.lotes_relacionados)
   const { variante, etiqueta } = ESTADO_A_VARIANTE[estado]
@@ -95,6 +100,13 @@ export function DepositoCard({
     deposito.lotes_relacionados.find((l) => l.lote === deposito.lote) ??
     deposito.lotes_relacionados[0]
   )?.id
+
+  // El pago de este lote también cubre los lotes que solo están en el resumen: las
+  // hojas de aprobar/devolver los muestran igual que la tarjeta.
+  const conLotesCubiertos = (lote: LoteRelacionado): LoteSeleccionado => ({
+    ...lote,
+    lotesCubiertos: [lote.lote, ...(lote.id === anclaId ? lotesDelResumen : [])],
+  })
 
   return (
     <article className="bg-card border-border flex h-full flex-col rounded-lg border p-4 sm:p-5">
@@ -150,14 +162,18 @@ export function DepositoCard({
 
                 {puedeGestionar && porResolver && (
                   <div className="flex w-full gap-2 sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none">
-                    <Button type="button" size="sm" onClick={() => onAprobar(lote)}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => onAprobar(conLotesCubiertos(lote))}
+                    >
                       <CheckCircle2 /> Aprobar
                     </Button>
                     <Button
                       type="button"
                       size="sm"
                       variant="destructive"
-                      onClick={() => onDevolver(lote)}
+                      onClick={() => onDevolver(conLotesCubiertos(lote))}
                     >
                       <XCircle /> Devolver
                     </Button>
@@ -170,7 +186,7 @@ export function DepositoCard({
                     size="sm"
                     variant="outline"
                     className="w-full sm:w-auto"
-                    onClick={() => onCambiarEstado(lote)}
+                    onClick={() => onCambiarEstado(conLotesCubiertos(lote))}
                   >
                     <RefreshCw /> Cambiar estado
                   </Button>
@@ -209,6 +225,12 @@ export function DepositoCard({
         >
           <Info /> Ver resumen{!tieneResumen && " (sin datos)"}
         </Button>
+
+        {puedeGestionar && (
+          <Button type="button" variant="ghost" onClick={() => onCorregir(deposito)}>
+            <PencilLine /> Corregir pago
+          </Button>
+        )}
       </div>
     </article>
   )

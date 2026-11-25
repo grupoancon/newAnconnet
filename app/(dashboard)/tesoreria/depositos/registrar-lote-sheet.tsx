@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { DepositosApiError, aprobarDeposito, subirRecibos } from "@/lib/api/depositos-api"
+import { comprimirImagen, MAX_BYTES_SUBIDA, megas } from "@/lib/comprimir-imagen"
 import { cn } from "@/lib/utils"
 
 import {
@@ -22,11 +23,19 @@ import {
   numeroReciboValido,
 } from "./depositos-utils"
 
-export type LoteSeleccionado = { id: number; lote: string }
+// `lotesCubiertos`: todos los lotes que paga este depósito (el propio más los que
+// solo vienen en el resumen), solo para mostrarlos. Se aprueba/devuelve por `id`.
+export type LoteSeleccionado = { id: number; lote: string; lotesCubiertos?: string[] }
+
+export function textoLotes(lote: LoteSeleccionado): string {
+  const lotes = lote.lotesCubiertos?.length ? lote.lotesCubiertos : [lote.lote]
+  return `${lotes.length > 1 ? "Lotes" : "Lote"}: ${lotes.join(", ")}`
+}
 
 type ReciboItem = { file: File; numero: string }
 
 const TIPOS_VALIDOS = ["image/jpeg", "image/png", "application/pdf"]
+const MAX_NOTA = 500
 
 export function RegistrarLoteSheet({
   lote,
@@ -42,19 +51,37 @@ export function RegistrarLoteSheet({
   const [items, setItems] = useState<ReciboItem[]>([])
   const [error, setError] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
+  const [nota, setNota] = useState("")
+  const [comprimiendo, setComprimiendo] = useState(false)
 
   // Cada vez que se abre para otro lote arranca limpio.
   useEffect(() => {
     setItems([])
+    setNota("")
     setError(null)
     setEnviando(false)
   }, [lote?.id])
 
-  function agregarArchivos(archivos: File[]) {
-    if (archivos.length === 0) return
+  async function agregarArchivos(seleccionados: File[]) {
+    if (seleccionados.length === 0) return
 
-    if (archivos.some((archivo) => !TIPOS_VALIDOS.includes(archivo.type))) {
+    if (seleccionados.some((archivo) => !TIPOS_VALIDOS.includes(archivo.type))) {
       setError("Solo se permiten archivos JPG, PNG o PDF")
+      return
+    }
+
+    // Las fotos se achican aquí; un PDF de más de 10 MB no lo acepta el servidor.
+    setComprimiendo(true)
+    const archivos = await Promise.all(seleccionados.map(comprimirImagen))
+    setComprimiendo(false)
+    const pesado = archivos.find((archivo) => archivo.size > MAX_BYTES_SUBIDA)
+    if (pesado) {
+      setError(
+        `"${pesado.name}" pesa ${megas(pesado.size)}; el máximo es ${megas(MAX_BYTES_SUBIDA)}.` +
+          (pesado.type === "application/pdf"
+            ? " Comprima el PDF o súbalo como imagen."
+            : "")
+      )
       return
     }
 
@@ -97,6 +124,7 @@ export function RegistrarLoteSheet({
           numero_recibo: items[i]?.numero ?? "",
           lote: lote.lote,
         })),
+        nota,
       })
       toast({ variant: "success", description: "Depósito aprobado exitosamente" })
       onRegistrado()
@@ -114,22 +142,23 @@ export function RegistrarLoteSheet({
   const puedeRegistrar =
     items.length > 0 &&
     items.every((item) => numeroReciboValido(item.numero)) &&
-    !enviando
+    !enviando &&
+    !comprimiendo
 
   return (
     <Sheet open={!!lote} onOpenChange={(abierto) => !abierto && !enviando && onCerrar()}>
       <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-md">
         <SheetHeader className="border-border border-b p-5">
-          <SheetTitle>Registrar lote</SheetTitle>
+          <SheetTitle>Registrar pago</SheetTitle>
           <SheetDescription>
-            Complete la información del recibo para registrar este lote.
+            Complete la información del recibo para registrar este pago.
           </SheetDescription>
         </SheetHeader>
 
         {lote && (
           <div className="flex flex-col gap-4 p-5">
             <div className="bg-muted rounded-lg p-4">
-              <p className="font-bold">Lote: {lote.lote}</p>
+              <p className="font-bold">{textoLotes(lote)}</p>
             </div>
 
             <div>
@@ -149,7 +178,7 @@ export function RegistrarLoteSheet({
                 accept=".jpg,.jpeg,.png,.pdf"
                 multiple
                 onChange={(event) => {
-                  agregarArchivos(Array.from(event.target.files ?? []))
+                  void agregarArchivos(Array.from(event.target.files ?? []))
                   // Permite volver a elegir el mismo archivo.
                   event.target.value = ""
                 }}
@@ -157,16 +186,20 @@ export function RegistrarLoteSheet({
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
-                disabled={enviando || items.length >= MAX_RECIBOS_POR_LOTE}
+                disabled={
+                  enviando || comprimiendo || items.length >= MAX_RECIBOS_POR_LOTE
+                }
                 className={cn(
                   "border-input bg-card hover:bg-muted flex h-11 w-full items-center justify-between rounded-md border px-3.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                   error && "border-destructive"
                 )}
               >
                 <span className="text-muted-foreground truncate">
-                  {items.length > 0
-                    ? `${items.length} recibo(s) — agregar más`
-                    : "Seleccionar archivos"}
+                  {comprimiendo
+                    ? "Preparando archivos…"
+                    : items.length > 0
+                      ? `${items.length} recibo(s) — agregar más`
+                      : "Seleccionar archivos"}
                 </span>
                 <Upload className="text-muted-foreground size-4" strokeWidth={1.7} />
               </button>
@@ -213,6 +246,29 @@ export function RegistrarLoteSheet({
                 <p className="text-destructive mt-1.5 text-xs font-medium">{error}</p>
               )}
             </div>
+
+            <div>
+              <label
+                htmlFor="nota-aprobacion"
+                className="text-muted-foreground mb-1.5 block text-xs font-semibold"
+              >
+                NOTA PARA EL CLIENTE{" "}
+                <span className="font-normal normal-case">— opcional</span>
+              </label>
+              <textarea
+                id="nota-aprobacion"
+                value={nota}
+                disabled={enviando}
+                maxLength={MAX_NOTA}
+                rows={3}
+                onChange={(event) => setNota(event.target.value)}
+                placeholder="Ej.: Se aplicó a la cuota de noviembre."
+                className="border-input bg-card focus:border-primary focus:ring-ring/15 w-full resize-none rounded-md border px-3 py-2 text-sm outline-none focus:ring-3 disabled:opacity-50"
+              />
+              <p className="text-muted-foreground mt-1 text-right text-xs">
+                {nota.length}/{MAX_NOTA}
+              </p>
+            </div>
           </div>
         )}
 
@@ -222,7 +278,7 @@ export function RegistrarLoteSheet({
           </Button>
           <Button type="button" disabled={!puedeRegistrar} onClick={registrar}>
             <CheckCircle2 />
-            {enviando ? "Registrando…" : "Registrar"}
+            {enviando ? "Registrando…" : "Registrar pago"}
           </Button>
         </SheetFooter>
       </SheetContent>

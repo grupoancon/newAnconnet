@@ -64,7 +64,14 @@ async function depositosFetch<T>(path: string, options: RequestInit = {}): Promi
       (typeof cuerpo?.error === "string" ? cuerpo.error : null) ??
       response.statusText ??
       "Error desconocido"
-    throw new DepositosApiError(mensaje, response.status, cuerpo?.code)
+    // Mensajes en inglés de multer (límite de subida del backend).
+    const traducido =
+      mensaje === "File too large"
+        ? "El archivo supera los 10 MB permitidos."
+        : mensaje === "Too many files"
+          ? "Solo se pueden subir 3 archivos a la vez."
+          : mensaje
+    throw new DepositosApiError(traducido, response.status, cuerpo?.code)
   }
 
   if (cuerpo && !Array.isArray(cuerpo) && typeof cuerpo.error === "string") {
@@ -121,6 +128,8 @@ export type DepositoResumen = {
   customAmount?: number | string
   totalPayment?: number
   multiCustomTotal?: number
+  // Lo pone el backend cuando tesorería corrige el resumen (POST /depositoss/corregir).
+  ajustadoEn?: string
 }
 
 export type DepositoBackend = {
@@ -189,6 +198,7 @@ export function aprobarDeposito(input: {
   id: number
   lote: string
   recibos: ReciboAprobacion[]
+  nota?: string
 }) {
   const [primero] = input.recibos
   return depositosFetch<unknown>("/aproved", {
@@ -202,6 +212,7 @@ export function aprobarDeposito(input: {
       name_comprobante: primero?.name ?? "",
       hash_comprobante: primero?.hash ?? "",
       recibos: input.recibos,
+      nota_aprobacion: input.nota?.trim() ?? "",
     }),
   })
 }
@@ -235,6 +246,36 @@ export function cambiarEstadoDeposito(input: {
       lote: input.lote,
       estado: "Aprobado",
       rec_asociado: input.recAsociado,
+    }),
+  })
+}
+
+export type LoteResumenCorregido = {
+  id: string
+  monto: number
+  principal: number
+  alicuota: number
+  mora: number
+}
+
+// POST /depositoss/corregir — corrige monto, banco de origen, n° de transacción y, si
+// se envían `lotes`, los valores del resumen (los lotes no se agregan ni quitan). El
+// backend lo aplica a todas las filas del mismo pago y recalcula los totales.
+export function corregirDeposito(input: {
+  id: number
+  montoPagado: number
+  bancoOrigen: string
+  numeroTransaccion: string
+  lotes?: LoteResumenCorregido[]
+}) {
+  return depositosFetch<{ ok: true; ids: number[] }>("/corregir", {
+    method: "POST",
+    body: JSON.stringify({
+      id: input.id,
+      monto_pagado: input.montoPagado,
+      banco_origen: input.bancoOrigen,
+      numero_transaccion: input.numeroTransaccion,
+      ...(input.lotes ? { lotes: input.lotes } : {}),
     }),
   })
 }
