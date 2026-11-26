@@ -1638,6 +1638,9 @@ export type MiVenta = {
   cliAsesor: string | null
   proyectoNombre: string | null
   lotePrice: number | null
+  // Precio de venta - descuentos (financiamiento, u oferta en ventas viejas) — es lo
+  // que muestran Ventas realizadas y el reporte general en la columna "Precio".
+  precioVenta?: number | null
   createdAt: string | null
   ventaNuevaAt: string | null
   offertStatus: string | null

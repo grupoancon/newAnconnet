@@ -384,10 +384,17 @@ export function ReporteVentasContent({ embebido = false }: { embebido?: boolean 
                           {proceso.cliLote || "—"}
                         </td>
                         <td className="px-3 py-2.5 print:px-1.5! print:py-1!">
-                          {proceso.cliAsesor || "—"}
+                          {/* En pantalla una sola línea cortada con "…" (nombre completo
+                              al pasar el mouse); al imprimir se muestra completo. */}
+                          <div
+                            className="text-muted-foreground max-w-36 truncate print:max-w-none! print:whitespace-normal! print:text-inherit!"
+                            title={proceso.cliAsesor ?? ""}
+                          >
+                            {proceso.cliAsesor || "—"}
+                          </div>
                         </td>
                         <td className="px-3 py-2.5 font-mono whitespace-nowrap print:px-1.5! print:py-1!">
-                          {formatearMoneda(proceso.lotePrice)}
+                          {formatearMoneda(proceso.precioVenta ?? proceso.lotePrice)}
                         </td>
                         <td className="px-3 py-2.5 whitespace-nowrap print:px-1.5! print:py-1!">
                           {formatearLugarVenta(proceso.location)}

@@ -17,11 +17,45 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { listarProyectos, type ProyectoInventario } from "@/lib/api/inventario-api"
 import { VentasApiError, obtenerReporteVentas, type MiVenta } from "@/lib/api/ventas-api"
 import { cn } from "@/lib/utils"
 
 const VENTAS_POR_PAGINA = 20
+
+// "location" es "oficina" | "Puerto Quito" (ver LUGARES_VENTA_OPCIONES).
+function formatearLugarVenta(location: string | null): string {
+  const normalizado = location?.trim().toLowerCase()
+  if (normalizado === "oficina") return "Oficina"
+  if (normalizado === "puerto quito") return "Puerto Quito"
+  return location || "—"
+}
+
+// Datos de la venta que se ven al pasar el mouse sobre el lote (mismos que las
+// columnas del reporte general).
+function DetalleVentaTooltip({ venta }: { venta: MiVenta }) {
+  const prospectador =
+    [venta.prospectador, venta.apoyoProyecto ? "Karina Coveña" : null]
+      .filter(Boolean)
+      .join(" / ") || "—"
+  const datos: [string, string][] = [
+    ["Tipo de venta", venta.tipoVenta || "—"],
+    ["Venta en", formatearLugarVenta(venta.location)],
+    ["Cómo nos contactó", venta.comoNosContacto || "—"],
+    ["Prospectador", prospectador],
+  ]
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px]">
+      {datos.map(([etiqueta, valor]) => (
+        <div key={etiqueta} className="contents">
+          <dt className="opacity-70">{etiqueta}</dt>
+          <dd className="font-medium">{valor}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
 
 const MESES = [
   "Enero",
@@ -372,7 +406,7 @@ export function VentasRealizadasContent() {
                           {venta.cliLote || "—"}
                         </span>
                         <span className="font-mono text-xs font-semibold">
-                          {formatearMoneda(venta.lotePrice)}
+                          {formatearMoneda(venta.precioVenta ?? venta.lotePrice)}
                         </span>
                       </div>
                       <div className="font-semibold">{venta.cliName || "—"}</div>
@@ -387,9 +421,16 @@ export function VentasRealizadasContent() {
                       </div>
                     </div>
 
-                    <span className="hidden font-mono font-bold lg:inline">
-                      {venta.cliLote || "—"}
-                    </span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="hidden w-fit cursor-default font-mono font-bold lg:inline">
+                          {venta.cliLote || "—"}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" align="start">
+                        <DetalleVentaTooltip venta={venta} />
+                      </TooltipContent>
+                    </Tooltip>
                     <span
                       className="hidden min-w-0 truncate font-semibold lg:inline"
                       title={venta.cliName ?? ""}
@@ -406,7 +447,7 @@ export function VentasRealizadasContent() {
                       {venta.cliAsesor || "—"}
                     </span>
                     <span className="hidden font-mono font-semibold lg:inline">
-                      {formatearMoneda(venta.lotePrice)}
+                      {formatearMoneda(venta.precioVenta ?? venta.lotePrice)}
                     </span>
                     <span className="text-muted-foreground hidden font-mono text-xs lg:inline">
                       {formatearFecha(venta.ventaNuevaAt ?? venta.createdAt)}

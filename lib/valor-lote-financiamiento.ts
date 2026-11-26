@@ -1,10 +1,11 @@
 // Valor del lote que se muestra en el reporte/impresión/Excel del financiamiento.
 //
-// Mientras no está aprobado se usa el precio actual del inventario (pvp). Una vez
-// aprobado, el precio del inventario puede cambiar después, así que se toma el valor
-// con el que quedó guardado el financiamiento. El backend no guarda el precio como
-// tal, pero sí total_financ = valor del lote − discount − extra_discount −
-// promo_discount (financiamiento.service.ts), así que se reconstruye sumándolos.
+// Es siempre el precio del inventario (pvp); si el lote no viene del inventario se usa
+// el lote_price del proceso. Antes, ya aprobado, se reconstruía sumando total_financ +
+// descuentos, pero en los financiamientos de Crédito directo/Mixto total_financ
+// además resta la entrada (ver importesDeVenta en convenios.service.ts del backend),
+// así que el valor salía por debajo del real (ej. G-M1-45: 27,598.26 en vez de
+// 36,398.26).
 type FinanciamientoGuardado = {
   total_financ: string | null
   discount: string | null
@@ -19,25 +20,13 @@ function numero(valor: string | number | null | undefined): number | null {
 }
 
 export function valorLoteFinanciamiento({
-  financiamiento,
-  finanStatus,
   pvpInventario,
   lotePriceProceso,
 }: {
-  financiamiento: FinanciamientoGuardado | undefined
-  finanStatus: string | null | undefined
+  financiamiento?: FinanciamientoGuardado | undefined
+  finanStatus?: string | null | undefined
   pvpInventario: string | number | null | undefined
   lotePriceProceso: string | number | null | undefined
 }): number | null {
-  const aprobado = (finanStatus ?? "").trim().toLowerCase() === "aprobado"
-  const total = numero(financiamiento?.total_financ)
-  if (aprobado && total != null) {
-    const guardado =
-      total +
-      (numero(financiamiento?.discount) ?? 0) +
-      (numero(financiamiento?.extra_discount) ?? 0) +
-      (numero(financiamiento?.promo_discount) ?? 0)
-    return Math.round(guardado * 100) / 100
-  }
   return numero(pvpInventario) ?? numero(lotePriceProceso)
 }

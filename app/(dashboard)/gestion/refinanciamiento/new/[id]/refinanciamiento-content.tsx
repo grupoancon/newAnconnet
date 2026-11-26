@@ -184,6 +184,11 @@ function redondear(valor: number): number {
 // el texto exacto: "100.1" y "100.10" son el mismo monto. Sin esto, el efecto que
 // sincroniza los campos del generador con la tabla pisaba lo que el asesor estaba
 // escribiendo en cada tecla.
+// Aviso del botón "Regenerar entradas"/"Regenerar tabla" cuando la tabla ya no
+// coincide con el N.º de cuotas o el abono inicial (ver entradasDesactualizadas).
+const AVISO_REGENERAR =
+  "Cambiaste el N.º de cuotas o el abono inicial: dale a Regenerar para actualizar la tabla."
+
 function mismoMonto(a: string, b: string): boolean {
   if (a.trim() === "" || b.trim() === "") return a.trim() === b.trim()
   return Math.abs(Number(a) - Number(b)) < 0.005
@@ -451,6 +456,25 @@ function CalendarioFechaInicioRefinanciamiento({
   )
 }
 
+// Filas "Cuota" (las "Entrada" de Contado/Crédito BIESS): solo el día 5 o el 20, igual
+// que la fecha de inicio de refinanciamiento.
+function CalendarioFechaCuota({
+  value,
+  onSelect,
+}: {
+  value: string
+  onSelect: (fecha: string) => void
+}) {
+  return (
+    <CalendarioFecha
+      value={value}
+      onSelect={onSelect}
+      esDiaElegible={(dia) => dia === 5 || dia === 20}
+      textoAyuda="Las cuotas solo se pueden pagar el día 5 o el día 20."
+    />
+  )
+}
+
 // "Crédito BIESS": la fecha de desembolso la fija el banco, cualquier día desde hoy —
 // a diferencia de la fecha de inicio de refinanciamiento, no está restringida al 5/20.
 function CalendarioFechaDesembolso({
@@ -489,6 +513,8 @@ function calcularFilasEntradaGeneradas(
   escrituraCierreContado: number = ESCRITURA_CONTADO
 ) {
   const fechaAbonoInicial = new Date().toISOString().slice(0, 10)
+  // Sin abono inicial (campo vacío o 0) no se agrega la fila "Abono inicial".
+  const filasAbonoInicial = () => (abonoInicial > 0 ? [abonoInicialFila] : [])
   const abonoInicialFila = {
     // El abono inicial tiene fecha libre (la del día en que se hace, hoy) — no
     // sigue la fecha de inicio de refinanciamiento, esa solo aplica a las cuotas.
@@ -530,7 +556,7 @@ function calcularFilasEntradaGeneradas(
       }
     })
     return [
-      abonoInicialFila,
+      ...filasAbonoInicial(),
       ...cuotas,
       {
         formaPago: filaCierre.etiqueta,
@@ -571,7 +597,7 @@ function calcularFilasEntradaGeneradas(
       observaciones: "",
     }
   })
-  return [abonoInicialFila, ...cuotas]
+  return [...filasAbonoInicial(), ...cuotas]
 }
 
 // Fecha de la N-ésima fila "Entrada" (0-indexed): la primera cae exacto en
@@ -682,6 +708,10 @@ export function RefinanciamientoContent({ id }: { id: string }) {
     calcularFechaDesembolsoPorDefecto()
   )
   const [calendarioDesembolsoAbierto, setCalendarioDesembolsoAbierto] = useState(false)
+  // Índice de la fila "Cuota" cuyo calendario (5/20) está abierto.
+  const [calendarioCuotaAbierto, setCalendarioCuotaAbierto] = useState<number | null>(
+    null
+  )
 
   // El cronograma ya generado (si existe) se reajusta en vista previa a partir de las
   // filas "Entrada" actuales: la cuota 1 cae un mes después de la última entrada, o
@@ -773,6 +803,9 @@ export function RefinanciamientoContent({ id }: { id: string }) {
   // regenere entradasTabla desde cero y pise filas reales con fechas/montos desiguales,
   // alícuota puntual u observaciones que no se pueden reconstruir solo con esos 3 números.
   const saltarAutoGeneracionRef = useRef(false)
+  // Último valor visto de "Abono inicial" por la auto-generación — para distinguir un
+  // campo que el asesor acaba de borrar de uno que nunca se llenó.
+  const abonoInicialAnteriorRef = useRef("")
   // Hasta 3 comentarios libres sobre el refinanciamiento.
   const [comentarios, setComentarios] = useState<string[]>([])
   // Ofrecimientos adicionales del lote (ej. Huerto, Tanque biodigestor) — selección múltiple.
@@ -874,6 +907,11 @@ export function RefinanciamientoContent({ id }: { id: string }) {
             // si el registro quedó con una fila así guardada para otro tipo (ej. de
             // una prueba anterior), se descarta al cargar para que no infle "entrada"
             // y deje el total a financiar en $0.
+            // Solo la PRIMERA fila "Abono capital" es la fija del campo "Abono capital"
+            // (y solo si ese campo tiene monto); las demás son filas que el asesor
+            // agregó a mano con esa forma de pago y se cargan como cualquier fila.
+            let filaFijaAbonoCapitalPendiente =
+              Number(refinanciamientoExistente.abono_capital) > 0
             const filasCargadas = refinanciamientoExistente.entradas
               .map((fila) => ({
                 formaPago: fila.forma_pago ?? fila.concepto ?? "Abono inicial",
@@ -912,14 +950,20 @@ export function RefinanciamientoContent({ id }: { id: string }) {
               .filter((fila) => {
                 // "Abono capital" se arma aparte (filaAbonoCapital), a partir del
                 // campo abono capital — acá solo se recuperan su fecha/observaciones.
-                if (fila.formaPago === FORMA_PAGO_ABONO_CAPITAL) {
+                if (
+                  fila.formaPago === FORMA_PAGO_ABONO_CAPITAL &&
+                  filaFijaAbonoCapitalPendiente
+                ) {
+                  filaFijaAbonoCapitalPendiente = false
                   if (fila.fechaPago) setFechaAbonoCapital(fila.fechaPago.slice(0, 10))
                   setObservacionesAbonoCapital(fila.observaciones)
                   const alicuotaGuardada = fila.alicuotas.reduce(
                     (acc, c) => acc + (Number(c.valor) || 0),
                     0
                   )
-                  setAlicuotaAbonoCapital(alicuotaGuardada > 0 ? String(alicuotaGuardada) : "")
+                  setAlicuotaAbonoCapital(
+                    alicuotaGuardada > 0 ? String(alicuotaGuardada) : ""
+                  )
                   return false
                 }
                 if (fila.formaPago === "Pago total") return esTipoContado(tipoCargado)
@@ -1085,6 +1129,11 @@ export function RefinanciamientoContent({ id }: { id: string }) {
   // descuento por Tipo de Refinanciamiento (más abajo) necesita este valor: su % se
   // calcula sobre el subtotal que queda después de la promoción, no sobre el PVP
   // bruto.
+  // Orden de refinanciamiento: 1) descuento extra, 2) promociones y descuento por tipo
+  // (5% Contado / 3% BIESS), 3) abono realizado, 4) adicionales. Los % se calculan
+  // sobre el valor del lote menos el descuento extra (no sobre valorLoteNumero, que ya
+  // trae abono/adicionales); el backend usa la misma base (RefinanciamientoService).
+  const baseDescuentos = Math.max(0, valorLoteBruto - (Number(extraDiscount) || 0))
   const promoDescuentoTotal = useMemo(
     () =>
       promocionesSeleccionadas.reduce((acc, id) => {
@@ -1093,11 +1142,11 @@ export function RefinanciamientoContent({ id }: { id: string }) {
         const valorEfecto = Number(promo.valor_efecto ?? 0)
         const monto =
           promo.tipo_efecto === "porcentaje"
-            ? (valorLoteNumero * valorEfecto) / 100
+            ? (baseDescuentos * valorEfecto) / 100
             : valorEfecto
         return acc + monto
       }, 0),
-    [valorLoteNumero, promocionesSeleccionadas, promocionesActivas]
+    [baseDescuentos, promocionesSeleccionadas, promocionesActivas]
   )
 
   // Si alguna promoción marcada "no se acumula" con el descuento por tipo de
@@ -1125,12 +1174,12 @@ export function RefinanciamientoContent({ id }: { id: string }) {
   // este % se calcula sobre el subtotal que ya resta la promoción, no sobre el PVP
   // bruto (ver promoDescuentoTotal arriba).
   useEffect(() => {
-    const subtotalTrasPromocion = Math.max(0, valorLoteNumero - promoDescuentoTotal)
-    if (financType === "Contado" && valorLoteNumero > 0) {
+    const subtotalTrasPromocion = Math.max(0, baseDescuentos - promoDescuentoTotal)
+    if (financType === "Contado" && baseDescuentos > 0) {
       setDiscount(
         redondear(subtotalTrasPromocion * DESCUENTO_CONTADO_PORCENTAJE).toFixed(2)
       )
-    } else if (esBiessLike(financType) && valorLoteNumero > 0) {
+    } else if (esBiessLike(financType) && baseDescuentos > 0) {
       setDiscount(
         redondear(subtotalTrasPromocion * DESCUENTO_BIESS_PORCENTAJE).toFixed(2)
       )
@@ -1138,7 +1187,7 @@ export function RefinanciamientoContent({ id }: { id: string }) {
       // Sin descuento por tipo de financiamiento.
       setDiscount("")
     } else if (financType === "Mixto") {
-      if (aplicarDescuentoMixto && valorLoteNumero > 0) {
+      if (aplicarDescuentoMixto && baseDescuentos > 0) {
         setDiscount(
           redondear(subtotalTrasPromocion * DESCUENTO_BIESS_PORCENTAJE).toFixed(2)
         )
@@ -1146,7 +1195,7 @@ export function RefinanciamientoContent({ id }: { id: string }) {
         setDiscount("")
       }
     }
-  }, [financType, valorLoteNumero, promoDescuentoTotal, aplicarDescuentoMixto])
+  }, [financType, baseDescuentos, promoDescuentoTotal, aplicarDescuentoMixto])
 
   // Si el tipo deja de ser el dueño de una fila de cierre — "Pago total" solo existe
   // en "Contado"; "Desembolso BIESS" solo en "Crédito BIESS"/"Mixto" (ej. el asesor
@@ -1173,10 +1222,13 @@ export function RefinanciamientoContent({ id }: { id: string }) {
   // del cronograma (ver desembolsoEnEntradas).
   const etiquetaCierreActual = etiquetaFilaCierre(financType)
   const formasPagoDisponibles = etiquetaCierreActual
-    ? ["Abono inicial", "Entrada", etiquetaCierreActual]
-    : FORMAS_PAGO_ENTRADA.filter(
-        (opcion) => opcion !== "Pago total" && opcion !== "Desembolso BIESS"
-      )
+    ? ["Abono inicial", "Entrada", FORMA_PAGO_ABONO_CAPITAL, etiquetaCierreActual]
+    : [
+        ...FORMAS_PAGO_ENTRADA.filter(
+          (opcion) => opcion !== "Pago total" && opcion !== "Desembolso BIESS"
+        ),
+        FORMA_PAGO_ABONO_CAPITAL,
+      ]
 
   // La "entrada" que reduce el saldo a financiar es solo la suma de "abono lote"
   // (la alícuota comunal es un cargo aparte, no se aplica al lote).
@@ -1195,7 +1247,9 @@ export function RefinanciamientoContent({ id }: { id: string }) {
           formaPago: FORMA_PAGO_ABONO_CAPITAL,
           fechaPago: fechaAbonoCapital,
           abonoLote: abonoCapitalNumero.toFixed(2),
-          alicuotas: [{ nombre: "Alicuota", valor: alicuotaAbonoCapital, fechaInicio: null }],
+          alicuotas: [
+            { nombre: "Alicuota", valor: alicuotaAbonoCapital, fechaInicio: null },
+          ],
           escritura: "",
           observaciones: observacionesAbonoCapital,
         }
@@ -1238,7 +1292,9 @@ export function RefinanciamientoContent({ id }: { id: string }) {
     () =>
       columnasAlicuota.map(
         (_, indice) =>
-          (indice === 0 && abonoCapitalNumero > 0 ? Number(alicuotaAbonoCapital) || 0 : 0) +
+          (indice === 0 && abonoCapitalNumero > 0
+            ? Number(alicuotaAbonoCapital) || 0
+            : 0) +
           entradasTabla.reduce(
             (acc, fila) => acc + (Number(fila.alicuotas[indice]?.valor) || 0),
             0
@@ -1383,8 +1439,9 @@ export function RefinanciamientoContent({ id }: { id: string }) {
     // abajo).
     if (esContadoLike(financType)) {
       const esBiess = esBiessLike(financType)
-      const faltaAbono =
-        abonoInicialGenerar.trim() === "" || isNaN(abonoInicial) || abonoInicial < 0
+      // Abono inicial vacío = sin abono inicial (0): la tabla se arma sin esa fila.
+      // Solo se avisa si lo escrito no es un monto válido.
+      const faltaAbono = isNaN(abonoInicial) || abonoInicial < 0
       const faltaCuotas = numeroEntradasGenerar.trim() === "" || !numero || numero < 1
       // "Crédito BIESS" además necesita el valor y la fecha de desembolso — sin eso no
       // hay cómo armar su fila de cierre (ver CONFIGURACIÓN DE REFINANCIAMIENTO más
@@ -1399,7 +1456,7 @@ export function RefinanciamientoContent({ id }: { id: string }) {
           variant: "error",
           title: "Faltan datos",
           description: faltaAbono
-            ? "Ingresa el valor de abono inicial."
+            ? "El abono inicial no es un monto válido."
             : faltaDesembolso
               ? "Ingresa el valor de desembolso."
               : "Ingresa el número de cuotas.",
@@ -1534,11 +1591,17 @@ export function RefinanciamientoContent({ id }: { id: string }) {
   useEffect(() => {
     if (saltarAutoGeneracionRef.current) {
       saltarAutoGeneracionRef.current = false
+      abonoInicialAnteriorRef.current = abonoInicialGenerar
       return
     }
     // Sin nada escrito en abono inicial todavía (formulario recién reseteado/vacío),
-    // no se genera nada solo — hace falta que el asesor escriba algo primero.
-    if (abonoInicialGenerar.trim() === "") return
+    // no se genera nada solo — hace falta que el asesor escriba algo primero. Si en
+    // cambio el asesor BORRÓ un abono inicial que ya tenía, cuenta como 0 y la tabla
+    // se regenera sin la fila "Abono inicial" (si no, quedaba la fila vieja).
+    const abonoAnterior = abonoInicialAnteriorRef.current
+    abonoInicialAnteriorRef.current = abonoInicialGenerar
+    const seBorroAbono = abonoInicialGenerar.trim() === "" && abonoAnterior.trim() !== ""
+    if (abonoInicialGenerar.trim() === "" && !seBorroAbono) return
     const abonoInicial = Number(abonoInicialGenerar)
     const valorEntradaTotal = valorEntradaTotalEfectivo
     const numero = parseInt(numeroEntradasGenerar, 10)
@@ -1685,6 +1748,33 @@ export function RefinanciamientoContent({ id }: { id: string }) {
     if (!numeroIgual) setNumeroEntradasGenerar(nuevoNumeroEntradas)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entradasTabla, financType])
+
+  // La tabla quedó desactualizada respecto a lo que pide el generador: el asesor
+  // cambió "N.º de cuotas" o "Abono inicial" y la tabla no se volvió a armar (ej. a la
+  // auto-generación le falta algún dato, o el valor no pasa sus reglas). Mismo
+  // cálculo que el efecto de arriba — se usa para avisar en "Regenerar entradas".
+  const entradasDesactualizadas = useMemo(() => {
+    if (entradasTabla.length === 0) return false
+    const filasAbonoInicial = entradasTabla.filter((f) => f.formaPago === "Abono inicial")
+    const filasEntrada = entradasTabla.filter((f) => f.formaPago === "Entrada")
+    const tieneFilaCierre =
+      esContadoLike(financType) &&
+      entradasTabla.some((f) => f.formaPago === etiquetaFilaCierre(financType))
+    const abonoTabla = filasAbonoInicial.length
+      ? String(
+          redondear(filasAbonoInicial.reduce((acc, f) => acc + (Number(f.abonoLote) || 0), 0))
+        )
+      : ""
+    const numeroTabla =
+      filasEntrada.length || tieneFilaCierre
+        ? String(filasEntrada.length + (tieneFilaCierre ? 1 : 0))
+        : ""
+    const abonoCampo = Number(abonoInicialGenerar) > 0 ? abonoInicialGenerar : ""
+    return (
+      !mismoMonto(abonoTabla, abonoCampo) ||
+      numeroTabla !== numeroEntradasGenerar.trim()
+    )
+  }, [entradasTabla, financType, abonoInicialGenerar, numeroEntradasGenerar])
 
   // Si la tabla se armó (auto-generación o "Regenerar entradas") antes de que
   // terminara de cargar el lote/proyecto (ej. obtenerLote todavía en vuelo), las filas
@@ -1940,6 +2030,19 @@ export function RefinanciamientoContent({ id }: { id: string }) {
       ) {
         return reajustarAbonoLoteEntradas(anterior, indice, valor)
       }
+      // Al cambiar la fecha de una "Cuota"/"Entrada", las cuotas siguientes y el
+      // "Pago total" se corren mes a mes desde esa fecha (ej. 20/12 → 20/01, 20/02…).
+      // "Desembolso BIESS" no: su fecha la fija el banco.
+      if (campo === "fechaPago" && valor && anterior[indice]?.formaPago === "Entrada") {
+        let meses = 0
+        return anterior.map((fila, i) => {
+          if (i === indice) return { ...fila, fechaPago: valor }
+          if (i < indice) return fila
+          if (fila.formaPago !== "Entrada" && fila.formaPago !== "Pago total") return fila
+          meses += 1
+          return { ...fila, fechaPago: calcularFechaEntrada(valor, meses) }
+        })
+      }
       return anterior.map((fila, i) =>
         i === indice ? { ...fila, [campo]: valor } : fila
       )
@@ -2035,12 +2138,8 @@ export function RefinanciamientoContent({ id }: { id: string }) {
   // que se aplican las restas (mismo cálculo que totalAFinanciar arriba, pero
   // mostrando el subtotal después de cada resta).
   const desgloseCalculo = useMemo(() => {
-    // A diferencia de financiamiento-content.tsx, acá arranca del PVP BRUTO del lote
-    // (no del ya ajustado) para poder mostrar los tres ajustes de refinanciamiento
-    // como sus propias líneas — adicionales/abono realizado/abono capital — antes de
-    // seguir con el mismo desglose de siempre (promoción → descuento por tipo →
-    // descuento extra → entrada). Al final de esos tres ajustes, `corriente` coincide
-    // exactamente con valorLoteNumero (ver su definición más arriba).
+    // Arranca del PVP BRUTO del lote y sigue el orden de refinanciamiento: descuento
+    // extra → promociones → descuento por tipo → abono realizado → adicionales.
     const lineas: {
       etiqueta: string
       monto: number
@@ -2062,15 +2161,14 @@ export function RefinanciamientoContent({ id }: { id: string }) {
       lineas.push({ etiqueta: "Subtotal", monto: corriente, tipo: "subtotal" })
     }
 
-    aplicarSuma("Adicionales", adicionalesNumero)
-    aplicarResta("Abono realizado", abonoRealizadoNumero)
+    // Orden: descuento extra → promociones → descuento por tipo → abono realizado →
+    // adicionales (ver baseDescuentos arriba).
+    aplicarResta("Descuento extra", Number(extraDiscount) || 0)
 
-    // Valor ya ajustado (coincide con valorLoteNumero) — sobre este se calculan los
-    // porcentajes de promoción/descuento por tipo, igual que en promoDescuentoTotal.
+    // Valor del lote − descuento extra (coincide con baseDescuentos) — sobre este se
+    // calculan los porcentajes de promoción/descuento por tipo.
     const valor = corriente
 
-    // Orden de descuentos: Promoción → Tipo de Refinanciamiento → Descuento adicional
-    // (ver mismo criterio en promoDescuentoTotal/el useEffect de discount, arriba).
     promocionesSeleccionadas.forEach((id) => {
       const promo = promocionesActivas.find((p) => p.id === id)
       if (!promo) return
@@ -2084,7 +2182,8 @@ export function RefinanciamientoContent({ id }: { id: string }) {
       aplicarResta(etiqueta, monto)
     })
     aplicarResta("Descuento", discountEfectivo)
-    aplicarResta("Descuento extra", Number(extraDiscount) || 0)
+    aplicarResta("Abono realizado", abonoRealizadoNumero)
+    aplicarSuma("Adicionales", adicionalesNumero)
 
     const ultima = lineas[lineas.length - 1]
     if (lineas.length > 1 && ultima.tipo === "subtotal") {
@@ -2175,7 +2274,8 @@ export function RefinanciamientoContent({ id }: { id: string }) {
       // esos datos (o, en BIESS, el valor de desembolso) en el generador rápido; el
       // mensaje dice cuál exactamente en vez del genérico "falta la tabla de entrada".
       if (esContadoLike(financType)) {
-        const faltaAbono = abonoInicialGenerar.trim() === ""
+        // Abono inicial vacío ya no bloquea (cuenta como 0, ver generarFilasEntrada).
+        const faltaAbono = false
         const faltaCuotas = numeroEntradasGenerar.trim() === ""
         // Solo BIESS (incluido "Sin Interés"): sin el valor de desembolso tampoco se
         // arma la tabla sola, aunque abono/cuotas ya estén completos — ver
@@ -2198,7 +2298,7 @@ export function RefinanciamientoContent({ id }: { id: string }) {
                   ? "Ingresa el número de cuotas."
                   : faltaDesembolso
                     ? "Ingresa el valor de desembolso."
-                    : "Revisa el abono inicial y el número de cuotas antes de generar.",
+                    : "Dale a \"Regenerar tabla\" para armar las cuotas antes de guardar.",
         })
         return null
       }
@@ -2814,10 +2914,10 @@ export function RefinanciamientoContent({ id }: { id: string }) {
                         onChange={setTasaInteres}
                       />
                       <TextField
-                        label="Adicionales ($)"
+                        label="Descuento extra ($)"
                         type="number"
-                        value={adicionales}
-                        onChange={setAdicionales}
+                        value={extraDiscount}
+                        onChange={setExtraDiscount}
                       />
                       <TextField
                         label="Abono realizado ($)"
@@ -2948,10 +3048,10 @@ export function RefinanciamientoContent({ id }: { id: string }) {
                         />
                       )}
                       <TextField
-                        label="Descuento extra ($)"
+                        label="Adicionales ($)"
                         type="number"
-                        value={extraDiscount}
-                        onChange={setExtraDiscount}
+                        value={adicionales}
+                        onChange={setAdicionales}
                       />
                       {!esContadoLike(financType) && (
                         <TextField
@@ -3379,25 +3479,65 @@ export function RefinanciamientoContent({ id }: { id: string }) {
                               </select>
                             </td>
                             <td className="px-2 py-1.5">
-                              <input
-                                type="date"
-                                value={fila.fechaPago}
-                                disabled={
-                                  ((financType === "Crédito directo" ||
-                                    financType === "Mixto") &&
-                                    fila.formaPago !== "Abono inicial") ||
-                                  (usaDesembolsoBiess(financType) &&
-                                    fila.formaPago === "Desembolso BIESS")
-                                }
-                                onChange={(e) =>
-                                  actualizarFilaEntrada(
-                                    indice,
-                                    "fechaPago",
-                                    e.target.value
-                                  )
-                                }
-                                className="border-input bg-card w-full rounded-sm border px-2 py-1 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                              />
+                              {esContadoLike(financType) &&
+                              fila.formaPago === "Entrada" ? (
+                                <Popover
+                                  open={calendarioCuotaAbierto === indice}
+                                  onOpenChange={(abierto) =>
+                                    setCalendarioCuotaAbierto(abierto ? indice : null)
+                                  }
+                                >
+                                  <PopoverTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="border-input bg-card flex w-full items-center justify-between gap-2 rounded-sm border px-2 py-1 text-sm outline-none"
+                                    >
+                                      <span
+                                        className={cn(
+                                          !fila.fechaPago && "text-muted-foreground"
+                                        )}
+                                      >
+                                        {fila.fechaPago
+                                          ? formatearFecha(fila.fechaPago)
+                                          : "Seleccione"}
+                                      </span>
+                                      <CalendarIcon
+                                        className="text-muted-foreground size-3.5 shrink-0"
+                                        strokeWidth={1.8}
+                                      />
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent align="start" className="w-auto">
+                                    <CalendarioFechaCuota
+                                      value={fila.fechaPago}
+                                      onSelect={(fecha) => {
+                                        actualizarFilaEntrada(indice, "fechaPago", fecha)
+                                        setCalendarioCuotaAbierto(null)
+                                      }}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              ) : (
+                                <input
+                                  type="date"
+                                  value={fila.fechaPago}
+                                  disabled={
+                                    ((financType === "Crédito directo" ||
+                                      financType === "Mixto") &&
+                                      fila.formaPago !== "Abono inicial") ||
+                                    (usaDesembolsoBiess(financType) &&
+                                      fila.formaPago === "Desembolso BIESS")
+                                  }
+                                  onChange={(e) =>
+                                    actualizarFilaEntrada(
+                                      indice,
+                                      "fechaPago",
+                                      e.target.value
+                                    )
+                                  }
+                                  className="border-input bg-card w-full rounded-sm border px-2 py-1 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                />
+                              )}
                             </td>
                             <td className="px-2 py-1.5">
                               <input
@@ -3732,9 +3872,16 @@ export function RefinanciamientoContent({ id }: { id: string }) {
                     type="button"
                     disabled={generando}
                     onClick={generarFilasEntrada}
-                    className="hover:bg-background/15 flex items-center gap-1.5 rounded-full px-3 py-2 text-[13px] font-semibold whitespace-nowrap transition-all duration-150 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-transparent sm:px-3.5 sm:text-sm"
+                    title={entradasDesactualizadas ? AVISO_REGENERAR : undefined}
+                    className={cn(
+                      "hover:bg-background/15 relative flex items-center gap-1.5 rounded-full px-3 py-2 text-[13px] font-semibold whitespace-nowrap transition-all duration-150 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-transparent sm:px-3.5 sm:text-sm",
+                      entradasDesactualizadas && "bg-amber-500/25 text-amber-300"
+                    )}
                   >
                     <RefreshCw className="size-3.5" strokeWidth={1.8} />
+                    {entradasDesactualizadas && (
+                      <span className="absolute -top-0.5 -right-0.5 size-2.5 animate-pulse rounded-full bg-amber-400" />
+                    )}
                     Regenerar tabla
                   </button>
                 ) : (
@@ -3743,9 +3890,16 @@ export function RefinanciamientoContent({ id }: { id: string }) {
                       type="button"
                       disabled={generando}
                       onClick={generarFilasEntrada}
-                      className="hover:bg-background/15 flex items-center gap-1.5 rounded-full px-3 py-2 text-[13px] font-semibold whitespace-nowrap transition-all duration-150 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-transparent sm:px-3.5 sm:text-sm"
+                      title={entradasDesactualizadas ? AVISO_REGENERAR : undefined}
+                      className={cn(
+                        "hover:bg-background/15 relative flex items-center gap-1.5 rounded-full px-3 py-2 text-[13px] font-semibold whitespace-nowrap transition-all duration-150 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-transparent sm:px-3.5 sm:text-sm",
+                        entradasDesactualizadas && "bg-amber-500/25 text-amber-300"
+                      )}
                     >
                       <RefreshCw className="size-3.5" strokeWidth={1.8} />
+                      {entradasDesactualizadas && (
+                        <span className="absolute -top-0.5 -right-0.5 size-2.5 animate-pulse rounded-full bg-amber-400" />
+                      )}
                       Regenerar entradas
                     </button>
                     <span className="text-background/30 hidden sm:inline">|</span>
